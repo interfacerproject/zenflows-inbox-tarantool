@@ -171,5 +171,6 @@ func main() {
 	http.HandleFunc("/read", inbox.readHandler)
 
 	host := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	fmt.Printf("Starting service on %s\n", host)
 	log.Fatal(http.ListenAndServe(host, nil))
 }
