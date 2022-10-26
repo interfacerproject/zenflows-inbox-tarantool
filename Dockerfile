@@ -11,6 +11,8 @@ RUN go build inbox.go zenflows-auth.go
 
 FROM debian:bullseye
 WORKDIR /root
+ENV HOST=0.0.0.0
+ENV PORT=80
 COPY --from=builder /app/inbox /root/
 COPY --from=builder /zenroom/meson/libzenroom.so /usr/lib/
 CMD ["/root/inbox"]
