@@ -1,0 +1,15 @@
+inbox:
+    build: .
+    working_dir: /app
+    ports:
+     - "5000:5000"
+    environment:
+      - REDIS=db:6379
+      - HOST=0.0.0.0
+      - PORT=5000
+    links:
+     - db
+db:
+    image: redis
+    ports:
+     - "6379:6379"
