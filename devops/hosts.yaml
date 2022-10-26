@@ -1,0 +1,13 @@
+all:
+  hosts:
+    116.203.117.144:
+      domain_name: gateway0.interfacer.dyne.org
+      port: 21000
+      zenflows: "http://fcos.interfacer.dyne.org:9000"
+#     staging:
+#       domain_name: gateway1.interfacer.dyne.org
+#       port: 21001
+#       zenflows: "https://fcos.interfacer.dyne.org"
+#       ansible_host: 116.203.117.144
+  vars:
+    ansible_port: 22010

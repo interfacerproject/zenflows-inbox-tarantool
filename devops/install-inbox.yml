@@ -1,0 +1,118 @@
+---
+- name: Create non root user
+  hosts: all
+  remote_user: root
+  tasks:
+  - name: Add the user 'inbox'
+    ansible.builtin.user:
+      name: inbox
+      shell: /bin/bash
+  - name: Create .ssh directory
+    file:
+      path: /home/inbox/.ssh
+      state: directory
+      owner: inbox
+      group: inbox
+  - name: Set authorized keys for user inbox
+    copy:
+      src: /root/.ssh/authorized_keys
+      remote_src: true
+      dest: /home/inbox/.ssh/authorized_keys
+      owner: inbox
+      group: inbox
+- name: Install zenflows inbox
+  hosts: all
+  remote_user: root
+  become_user: inbox
+  become_method: su
+  vars:
+    basedir: "/zenflows-inbox"
+  tasks:
+  - name: Install package dependencies
+    ansible.builtin.package:
+      name:
+       - nginx
+       - tmux
+       - git
+       - redis
+       - build-essential
+      state: latest
+
+  - name: Download go
+    get_url:
+      url: "https://go.dev/dl/go1.19.2.linux-amd64.tar.gz"
+      dest: "go.tar.gz"
+
+  - name: Delete old installation of go
+    file:
+      state: absent
+      path: /usr/local/go
+
+  - name: Extract go
+    command: tar -C /usr/local -xzf go.tar.gz
+
+#     ansible.builtin.unarchive:
+#       remote_src: yes
+#       src: go.tar.gz
+#       dest: /usr/local
+
+  - name: Update /etc/profile with path of go
+    lineinfile:
+      dest: /etc/profile
+      line: "PATH=$PATH:/usr/local/go/bin"
+      owner: root
+
+#   - name: Create project directory
+#     ansible.builtin.file:
+#       path: "/{{ basedir }}"
+#       state: directory
+#       owner: inbox
+#       group: inbox
+
+  - name: Git checkout project
+    ansible.builtin.git:
+      repo: 'https://github.com/dyne/zenflows-inbox.git'
+      dest: "{{ basedir }}"
+
+
+  - name: Recursively change ownership of a directory
+    ansible.builtin.file:
+      path: "{{ basedir }}"
+      state: directory
+      recurse: yes
+      owner: inbox
+      group: inbox
+
+  - name: Build app
+    become: true
+    shell: PATH=$PATH:/usr/local/go/bin go build inbox.go zenflows-auth.go
+    args:
+      chdir: "{{ basedir }}"
+
+  - name: Make service executable
+    become: true
+    file: dest="{{ basedir }}/inbox" mode=u+x
+
+  - name: kill old tmux session
+    command: tmux kill-session -t zenflows-inbox-{{ port }}
+    ignore_errors: yes
+
+  - name: .env
+    become: true
+    blockinfile:
+      dest: "/{{ basedir }}/.env.{{ port }}"
+      create: true
+      block: |
+          export HOST=127.0.0.1
+          export REDIS=127.0.0.1:6379
+          export REDIS_PREFIX={{ port }}
+          export PORT={{ port }}
+
+  - name: run proxy
+    become: true
+    command: tmux new-session -d -s zenflows-inbox-{{ port }} "source {{ basedir }}/.env.{{ port }} && {{ basedir }}/inbox"
+
+  - name: Restart redis
+    ansible.builtin.service:
+      state: restarted
+      name: redis-server
