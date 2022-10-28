@@ -10,7 +10,7 @@ import (
 	"net/http"
 )
 
-const GQL_PERSON_PUBKEY string = "query($email: String!) {personPubkey(email: $email)}"
+const GQL_PERSON_PUBKEY string = "query($id: ID!) {personPubkey(id: $id)}"
 
 // Input and output of sign_graphql.zen
 type ZenroomData struct {
@@ -24,11 +24,11 @@ type ZenroomResult struct {
 }
 
 // Fills ZenroomData with the public key requested to zenflows (from the email)
-func (data *ZenroomData) requestPublicKey(email string) error {
+func (data *ZenroomData) requestPublicKey(id string) error {
 	query, err := json.Marshal(map[string]interface{}{
 		"query": GQL_PERSON_PUBKEY,
 		"variables": map[string]string{
-			"email": email,
+			"id": id,
 		},
 	})
 	resp, err := http.Post("http://fcos.interfacer.dyne.org:9000/api", "application/json", bytes.NewReader(query))

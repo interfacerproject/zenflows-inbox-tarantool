@@ -24,7 +24,7 @@ type Config struct {
 
 type Message struct {
 	Sender    string   `json:"sender"`
-	Receivers []string `json:"receiver"`
+	Receivers []string `json:"receivers"`
 }
 
 type Inbox struct {
@@ -62,6 +62,13 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
+
+	if len(message.Receivers) == 0 {
+		result["success"] = false
+		result["error"] = "No receivers"
+		return
+	}
+
 	zenroomData.requestPublicKey(message.Sender)
 	err = zenroomData.isAuth()
 	if err != nil {
@@ -86,7 +93,7 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 
 type ReadMessages struct {
 	RequestId int    `json:"request_id"`
-	Sender    string `json:"sender"`
+	Receiver  string `json:"receiver"`
 }
 
 func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +123,7 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(readMessage.Sender)
+	zenroomData.requestPublicKey(readMessage.Receiver)
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -126,8 +133,8 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 	pipe := inbox.rds.Pipeline()
 
 	// Read from redis and delete the messages
-	rdsMessages := pipe.SMembers(inbox.ctx, readMessage.Sender)
-	pipe.Del(inbox.ctx, readMessage.Sender)
+	rdsMessages := pipe.SMembers(inbox.ctx, readMessage.Receiver)
+	pipe.Del(inbox.ctx, readMessage.Receiver)
 
 	_, err = pipe.Exec(inbox.ctx)
 	if err != nil {

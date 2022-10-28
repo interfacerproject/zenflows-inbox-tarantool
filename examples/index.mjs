@@ -4,8 +4,11 @@ import { zencode_exec } from 'zenroom';
 import axios from 'axios';
 
 const PIPPO_EDDSA = "AEkxhh4aFV1eG88FY8LjZSMyJXgmynUdWzUPV6tCHwqn"
+const PIPPO_ID = "0620YFM3DCC74PEK6VYH32EF10"
 const PLUTO_EDDSA = "A7mSkKeAvAnDeeuWNW5TuBLnmKCLdyrJK652SZj2xmiP"
+const PLUTO_ID = "0620WKGWCF86T1NY37PZ1YNG64"
 const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
+const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
 
 const signRequest = async (json, key) => {
 	const data = `{"gql": "${Buffer.from(json, 'utf8').toString('base64')}"}`
@@ -18,8 +21,8 @@ const signRequest = async (json, key) => {
 
 const sendMessage = async (message) => {
     const request = {
-        sender: "pippo@disney.com",
-        receiver: ["paperino@dyne.org","pluto@dyne.org"],
+        sender: PIPPO_ID,
+        receivers: [PAPERINO_ID,PLUTO_ID],
         message: message,
         subject: "Subject",
         data:    "timestamp"
@@ -46,7 +49,7 @@ const assertPostMany = async() => {
 const readMessages = async(email, key) => {
     const request = {
         request_id: 42,
-        sender: email
+        receiver: email
     }
     const requestJSON = JSON.stringify(request)
     const requestHeaders =  await signRequest(requestJSON, key);
@@ -68,5 +71,5 @@ const assertReadMany = async(email, key) => {
 
 }
 await assertPostMany()
-assertReadMany("pluto@dyne.org", PLUTO_EDDSA)
-assertReadMany("paperino@dyne.org", PAPERINO_EDDSA)
+assertReadMany(PLUTO_ID, PLUTO_EDDSA)
+assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
