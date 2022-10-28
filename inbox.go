@@ -35,9 +35,14 @@ type Inbox struct {
 //go:embed zenflows-crypto/src/verify_graphql.zen
 var VERIFY string
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
 	w.Header().Set("Content-Type", "application/json")
+	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
@@ -99,6 +104,7 @@ type ReadMessages struct {
 func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
 	w.Header().Set("Content-Type", "application/json")
+	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
