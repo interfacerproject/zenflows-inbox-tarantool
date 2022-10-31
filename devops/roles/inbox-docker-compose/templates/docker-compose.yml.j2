@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+    inbox:
+        image: ghcr.io/dyne/zenflows-inbox:main
+        working_dir: /app
+        ports:
+          - "{{ port }}:80"
+        environment:
+          - REDIS=db:6379
+        links:
+          - db
+    db:
+        image: redis

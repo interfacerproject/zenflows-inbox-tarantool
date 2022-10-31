@@ -1,0 +1,34 @@
+---
+- name: Install package dependencies
+  ansible.builtin.package:
+    name:
+     - nginx
+     - tmux
+    state: latest
+
+- name: Create base directory
+  file:
+    path: "{{ basedir }}"
+    state: directory
+    owner: root
+    group: root
+
+- name: Template a file to /etc/file.conf
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ basedir }}/docker-compose.yml"
+    owner: root
+    group: root
+
+- name: Pull docker images
+  become: true
+  command: docker compose pull
+  args:
+    chdir: "{{ basedir }}"
+
+- name: Start docker images
+  become: true
+  command: docker compose up -d
+  args:
+    chdir: "{{ basedir }}"
+

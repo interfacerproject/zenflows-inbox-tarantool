@@ -6,7 +6,7 @@ help: ## Display this help.
 
 ##@ Server management
 install: ## 🔨 Install inbox
-	$(call ANSIPLAY, install-inbox.yml)
+	$(call ANSIPLAY, setup-inbox.yml)
 
 tls: ## 🔐 Challenge for SSL/TLS
 	$(call ANSIPLAY, acme-certificate.yml)

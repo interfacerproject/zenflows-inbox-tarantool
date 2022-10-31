@@ -94,6 +94,7 @@
     file: dest="{{ basedir }}/inbox" mode=u+x
 
   - name: kill old tmux session
+    become: true
     command: tmux kill-session -t zenflows-inbox-{{ port }}
     ignore_errors: yes
 
