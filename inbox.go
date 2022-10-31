@@ -150,9 +150,9 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resultMessages := rdsMessages.Val()
-	var messages []map[string]string
+	var messages []map[string]interface{}
 	for i := 0; i < len(resultMessages); i++ {
-		var message map[string]string
+		var message map[string]interface{}
 		json.Unmarshal([]byte(resultMessages[i]), &message)
 		messages = append(messages, message)
 	}

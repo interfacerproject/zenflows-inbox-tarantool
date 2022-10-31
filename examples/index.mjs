@@ -5,10 +5,12 @@ import axios from 'axios';
 
 const PIPPO_EDDSA = "AEkxhh4aFV1eG88FY8LjZSMyJXgmynUdWzUPV6tCHwqn"
 const PIPPO_ID = "0620YFM3DCC74PEK6VYH32EF10"
-const PLUTO_EDDSA = "A7mSkKeAvAnDeeuWNW5TuBLnmKCLdyrJK652SZj2xmiP"
-const PLUTO_ID = "0620WKGWCF86T1NY37PZ1YNG64"
+const PLUTO_EDDSA = "6M3sJz56689qf67xhKyfT3Lf19eiq1xWXhmtzBipdW3n"
+const PLUTO_ID = "061TQRJG3RP9YN9HVXH6BMXK5W"
 const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
 const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
+
+const url="http://localhost:8080"
 
 const signRequest = async (json, key) => {
 	const data = `{"gql": "${Buffer.from(json, 'utf8').toString('base64')}"}`
@@ -33,7 +35,7 @@ const sendMessage = async (message) => {
         headers: requestHeaders
     };
 
-    const result = await axios.post("http://localhost:8080/send", request, config);
+    const result = await axios.post(`${url}/send`, request, config);
     return result
 }
 
@@ -57,7 +59,7 @@ const readMessages = async(email, key) => {
         headers: requestHeaders
     };
 
-    const result = await axios.post("http://localhost:8080/read", request, config);
+    const result = await axios.post(`${url}/read`, request, config);
     return result
 }
 
@@ -67,6 +69,7 @@ const assertReadMany = async(email, key) => {
     res.data.messages.forEach((v, i) => {
         console.assert(v.message.startsWith("Ciao a tutti"))
         console.assert(v.subject == "Subject")
+        console.assert(v.receivers.length == 2)
     })
 
 }
