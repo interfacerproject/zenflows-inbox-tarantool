@@ -6,3 +6,5 @@ github.com/dyne/Zenroom/bindings/golang/zenroom v0.0.0-20221011162848-b675846b23
 github.com/dyne/Zenroom/bindings/golang/zenroom v0.0.0-20221011162848-b675846b230e/go.mod h1:ysQV5vx0OYClaDG0gK2yH/m2h4iGy+0ow+7nVdGXago=
 github.com/go-redis/redis/v8 v8.11.5 h1:AcZZR7igkdvfVmQTPnu9WE37LRrO/YrBH5zWyjDC0oI=
 github.com/go-redis/redis/v8 v8.11.5/go.mod h1:gREzHqY1hg6oD9ngVRbLStwAWKhA0FEgq8Jd4h5lpwo=
+github.com/rs/cors v1.8.2 h1:KCooALfAYGs415Cwu5ABvv9n9509fSiG5SQJn/AQo4U=
+github.com/rs/cors v1.8.2/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=

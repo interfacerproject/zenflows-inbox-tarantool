@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"github.com/rs/cors"
 )
 
 type Config struct {
@@ -180,10 +181,19 @@ func main() {
 		DB:       0,
 	}), ctx: context.Background()}
 
-	http.HandleFunc("/send", inbox.sendHandler)
-	http.HandleFunc("/read", inbox.readHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/send", inbox.sendHandler)
+	mux.HandleFunc("/read", inbox.readHandler)
 
+	c := cors.New(cors.Options{
+		AllowOriginFunc: func(origin string) bool {return true},
+		AllowCredentials: true,
+		AllowedHeaders: []string{"Zenflows-Sign"},
+	})
+
+
+	handler := c.Handler(mux)
 	host := fmt.Sprintf("%s:%d", config.Host, config.Port)
 	fmt.Printf("Starting service on %s\n", host)
-	log.Fatal(http.ListenAndServe(host, nil))
+	log.Fatal(http.ListenAndServe(host, handler))
 }
