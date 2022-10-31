@@ -1,0 +1,7 @@
+---
+- name: Install the inbox service
+  hosts: all
+  remote_user: root
+  roles:
+    - common
+    - inbox-docker-compose

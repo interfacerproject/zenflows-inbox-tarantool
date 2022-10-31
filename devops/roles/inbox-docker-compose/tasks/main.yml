@@ -13,12 +13,18 @@
     owner: root
     group: root
 
-- name: Template a file to /etc/file.conf
+- name: Create docker-compose.yml
   template:
     src: docker-compose.yml.j2
     dest: "{{ basedir }}/docker-compose.yml"
     owner: root
     group: root
+
+- name: Stop docker containers
+  become: true
+  command: docker compose down
+  args:
+    chdir: "{{ basedir }}"
 
 - name: Pull docker images
   become: true
@@ -26,7 +32,7 @@
   args:
     chdir: "{{ basedir }}"
 
-- name: Start docker images
+- name: Start docker containers
   become: true
   command: docker compose up -d
   args:
