@@ -32,6 +32,7 @@ type Storage interface {
 	send(Message) (int, error)
 	read(string, bool) ([]ReadAll, error)
 	set(string, int, bool) error
+	countUnread(string) (int, error)
 }
 
 type Inbox struct {
@@ -210,6 +211,58 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 	result["success"] = true
 	return
 }
+
+type CountMessages struct {
+	Receiver  string `json:"receiver"`
+}
+
+func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
+	// Setup json response
+	w.Header().Set("Content-Type", "application/json")
+	enableCors(&w)
+	result := map[string]interface{}{
+		"success": false,
+	}
+	defer json.NewEncoder(w).Encode(result)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+
+	// Verify signature request
+	zenroomData := ZenroomData{
+		Gql:            b64.StdEncoding.EncodeToString(body),
+		EdDSASignature: r.Header.Get("zenflows-sign"),
+	}
+	var countMessages CountMessages
+	err = json.Unmarshal(body, &countMessages)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+	zenroomData.requestPublicKey(countMessages.Receiver)
+	err = zenroomData.isAuth()
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+	count, err := inbox.storage.countUnread(countMessages.Receiver)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+
+	result["success"] = true
+	result["count"] = count
+	return
+}
+
 func loadEnvConfig() Config {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	return Config{
@@ -233,6 +286,7 @@ func main() {
 	mux.HandleFunc("/send", inbox.sendHandler)
 	mux.HandleFunc("/read", inbox.readHandler)
 	mux.HandleFunc("/set-read", inbox.setHandler)
+	mux.HandleFunc("/count-unread", inbox.countHandler)
 
 	c := cors.New(cors.Options{
 		AllowOriginFunc:  func(origin string) bool { return true },

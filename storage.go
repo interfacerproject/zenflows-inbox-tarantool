@@ -45,6 +45,10 @@ const UPDATE_READ_RECV = `
 UPDATE receivers SET read = $1 WHERE receiver = $2 AND message = $3;
 `
 
+const COUNT_UNREAD_RECV = `
+SELECT COUNT(message) FROM receivers WHERE receiver = $1 AND NOT read;
+`
+
 type SqlStorage struct {
 	db  *sql.DB
 	ctx context.Context
@@ -143,4 +147,17 @@ func (storage *SqlStorage) set(who string, message_id int, read bool) error {
 		return err
 	}
 	return nil
+}
+
+func (storage *SqlStorage) countUnread(who string) (int, error) {
+	stmt, err := storage.db.Prepare(COUNT_UNREAD_RECV)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	err = stmt.QueryRow(who).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

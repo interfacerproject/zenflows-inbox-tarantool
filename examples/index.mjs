@@ -10,7 +10,7 @@ const PLUTO_ID = "061TQRJG3RP9YN9HVXH6BMXK5W"
 const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
 const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
 
-const url="http://localhost:8080"
+const url="http://localhost:5000"
 //const url="https://gateway0.interfacer.dyne.org/inbox"
 
 const signRequest = async (json, key) => {
@@ -94,7 +94,22 @@ const setMessage = async(message_id, receiver, read, key) => {
     const result = await axios.post(`${url}/set-read`, request, config);
     return result
 }
+
+const countMessages = async(receiver, key) => {
+    const request = {
+        receiver,
+    }
+    const requestJSON = JSON.stringify(request)
+    const requestHeaders =  await signRequest(requestJSON, key);
+    const config = {
+        headers: requestHeaders
+    };
+
+    const result = await axios.post(`${url}/count-unread`, request, config);
+    return result
+}
 //await assertPostMany()
-assertReadMany(PLUTO_ID, PLUTO_EDDSA)
+//assertReadMany(PLUTO_ID, PLUTO_EDDSA)
 //assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
-setMessage(230, PLUTO_ID, true, PLUTO_EDDSA)
+//setMessage(10, PLUTO_ID, true, PLUTO_EDDSA)
+console.log(await countMessages(PLUTO_ID, PLUTO_EDDSA))

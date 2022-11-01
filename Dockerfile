@@ -7,7 +7,7 @@ RUN apt update && apt install -y build-essential git cmake vim python3 python3-p
 RUN cd /zenroom && make linux-go
 ADD . /app
 WORKDIR /app
-RUN go build inbox.go zenflows-auth.go
+RUN go build inbox.go zenflows-auth.go storage.go
 
 FROM debian:bullseye
 WORKDIR /root
