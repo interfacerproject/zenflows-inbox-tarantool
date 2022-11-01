@@ -11,6 +11,7 @@ const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
 const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
 
 const url="http://localhost:8080"
+//const url="https://gateway0.interfacer.dyne.org/inbox"
 
 const signRequest = async (json, key) => {
 	const data = `{"gql": "${Buffer.from(json, 'utf8').toString('base64')}"}`
@@ -25,9 +26,11 @@ const sendMessage = async (message) => {
     const request = {
         sender: PIPPO_ID,
         receivers: [PAPERINO_ID,PLUTO_ID],
-        message: message,
-        subject: "Subject",
-        data:    "timestamp"
+        content: {
+            message: message,
+            subject: "Subject",
+            data:    "timestamp"
+        }
     }
     const requestJSON = JSON.stringify(request)
     const requestHeaders =  await signRequest(requestJSON, PIPPO_EDDSA);
@@ -51,7 +54,8 @@ const assertPostMany = async() => {
 const readMessages = async(email, key) => {
     const request = {
         request_id: 42,
-        receiver: email
+        receiver: email,
+        //only_unread: false,
     }
     const requestJSON = JSON.stringify(request)
     const requestHeaders =  await signRequest(requestJSON, key);
@@ -67,12 +71,30 @@ const assertReadMany = async(email, key) => {
     const res = await readMessages(email, key)
     console.assert(res.data.success)
     res.data.messages.forEach((v, i) => {
-        console.assert(v.message.startsWith("Ciao a tutti"))
-        console.assert(v.subject == "Subject")
-        console.assert(v.receivers.length == 2)
+        console.log(v)
+        console.assert(v.content.message.startsWith("Ciao a tutti"))
+        console.assert(v.content.subject == "Subject")
+        console.assert(!v.read)
     })
 
 }
-await assertPostMany()
+
+const setMessage = async(message_id, receiver, read, key) => {
+    const request = {
+        message_id,
+        receiver,
+        read
+    }
+    const requestJSON = JSON.stringify(request)
+    const requestHeaders =  await signRequest(requestJSON, key);
+    const config = {
+        headers: requestHeaders
+    };
+
+    const result = await axios.post(`${url}/set-read`, request, config);
+    return result
+}
+//await assertPostMany()
 assertReadMany(PLUTO_ID, PLUTO_EDDSA)
-assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
+//assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
+setMessage(230, PLUTO_ID, true, PLUTO_EDDSA)
