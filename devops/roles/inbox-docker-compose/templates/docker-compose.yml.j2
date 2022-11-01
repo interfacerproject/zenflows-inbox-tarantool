@@ -1,14 +1,21 @@
-version: "3"
-
+version: "2"
 services:
-    inbox:
-        image: ghcr.io/dyne/zenflows-inbox:main
-        working_dir: /app
-        ports:
-          - "{{ port }}:80"
-        environment:
-          - REDIS=db:6379
-        links:
-          - db
-    db:
-        image: redis
+  inbox:
+    image: ghcr.io/dyne/zenflows-inbox:main
+    working_dir: /app
+    ports:
+      - "{{ port }}:80"
+    environment:
+      DB_URL: "postgresql://inbox:password@db:5432/inbox?sslmode=disable"
+    depends_on:
+      - db
+  db:
+    image: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: inbox
+volumes:
+  postgres_data:

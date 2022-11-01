@@ -10,8 +10,8 @@ const PLUTO_ID = "061TQRJG3RP9YN9HVXH6BMXK5W"
 const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
 const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
 
-const url="http://localhost:5000"
-//const url="https://gateway0.interfacer.dyne.org/inbox"
+//const url="http://localhost:5000"
+const url="https://gateway0.interfacer.dyne.org/inbox"
 
 const signRequest = async (json, key) => {
 	const data = `{"gql": "${Buffer.from(json, 'utf8').toString('base64')}"}`
@@ -55,7 +55,7 @@ const readMessages = async(email, key) => {
     const request = {
         request_id: 42,
         receiver: email,
-        //only_unread: false,
+        //only_unread: true,
     }
     const requestJSON = JSON.stringify(request)
     const requestHeaders =  await signRequest(requestJSON, key);
@@ -109,7 +109,7 @@ const countMessages = async(receiver, key) => {
     return result
 }
 //await assertPostMany()
-//assertReadMany(PLUTO_ID, PLUTO_EDDSA)
+assertReadMany(PLUTO_ID, PLUTO_EDDSA)
 //assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
 //setMessage(10, PLUTO_ID, true, PLUTO_EDDSA)
-console.log(await countMessages(PLUTO_ID, PLUTO_EDDSA))
+//console.log(await countMessages(PLUTO_ID, PLUTO_EDDSA))
