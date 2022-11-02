@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	//"time"
+	"time"
 	"database/sql"
-	"fmt"
 	_ "github.com/lib/pq"
+	"log"
 )
 
 const CREATE_TABLES = `
@@ -61,13 +61,25 @@ type ReadAll struct {
 	Read    bool                   `json:"read"`
 }
 
+const MAX_RETRY int = 10
+
 func (storage *SqlStorage) init(connectionStr string) error {
 	var err error
 	storage.db, err = sql.Open("postgres", connectionStr)
 	if err != nil {
 		return err
 	}
-	err = storage.db.Ping()
+
+	for done, retry := false, 0; !done; retry++ {
+		err = storage.db.Ping()
+		done = retry == MAX_RETRY || err == nil
+		if !done {
+			log.Println("Could not connect to the DB, retrying...")
+			time.Sleep(3 * time.Second)
+		} else {
+			log.Println("Connected to the DB")
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -89,7 +101,6 @@ func (storage *SqlStorage) send(message Message) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println(id)
 	stmt.Close()
 	stmt, err = storage.db.Prepare(SAVE_RECV)
 	if err != nil {
