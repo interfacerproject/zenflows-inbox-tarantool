@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	b64 "encoding/base64"
 	"encoding/json"
@@ -275,7 +274,7 @@ func loadEnvConfig() Config {
 func main() {
 	config := loadEnvConfig()
 
-	storage := &SqlStorage{ctx: context.Background()}
+	storage := &TTStorage{}
 	err := storage.init(config.DBUrl)
 	if err != nil {
 		log.Fatal(err.Error())

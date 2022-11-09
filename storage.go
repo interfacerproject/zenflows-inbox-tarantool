@@ -1,57 +1,15 @@
 package main
 
 import (
-	"context"
+	"fmt"
 	"encoding/json"
-	"time"
-	"database/sql"
-	_ "github.com/lib/pq"
-	"log"
+	//"time"
+	"github.com/tarantool/go-tarantool"
+	//"log"
 )
 
-const CREATE_TABLES = `
-
-CREATE TABLE IF NOT EXISTS messages (
-	pk     SERIAL PRIMARY KEY,
-	sender VARCHAR(64),
-	data   JSON NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS receivers (
-	message  INTEGER REFERENCES messages,
-	receiver VARCHAR(64),
-	read     BOOLEAN DEFAULT false,
-	PRIMARY KEY (receiver, message)
-);
-`
-
-const SAVE_MESSAGES = `
-INSERT INTO messages (sender, data) VALUES ($1, $2) RETURNING pk;
-`
-
-const SAVE_RECV = `
-INSERT INTO receivers (receiver, message, read) VALUES ($1, $2, false);
-`
-
-const READ_ALL_RECV = `
-SELECT m.pk, m.sender, m.data, r.read FROM messages AS m JOIN receivers AS r ON m.pk=r.message WHERE r.receiver = $1;
-`
-
-const READ_UNREAD_RECV = `
-SELECT m.pk, m.sender, m.data, r.read FROM messages AS m JOIN receivers AS r ON m.pk=r.message WHERE r.receiver = $1 AND NOT r.read;
-`
-
-const UPDATE_READ_RECV = `
-UPDATE receivers SET read = $1 WHERE receiver = $2 AND message = $3;
-`
-
-const COUNT_UNREAD_RECV = `
-SELECT COUNT(message) FROM receivers WHERE receiver = $1 AND NOT read;
-`
-
-type SqlStorage struct {
-	db  *sql.DB
-	ctx context.Context
+type TTStorage struct {
+	db  *tarantool.Connection
 }
 
 type ReadAll struct {
@@ -63,112 +21,76 @@ type ReadAll struct {
 
 const MAX_RETRY int = 10
 
-func (storage *SqlStorage) init(connectionStr string) error {
+func (storage *TTStorage) init(connectionStr string) error {
 	var err error
-	storage.db, err = sql.Open("postgres", connectionStr)
+	storage.db, err = tarantool.Connect("127.0.0.1:3500", tarantool.Opts{
+		User: "inbox",
+		Pass: "inbox",
+	})
 	if err != nil {
 		return err
 	}
 
-	for done, retry := false, 0; !done; retry++ {
-		err = storage.db.Ping()
-		done = retry == MAX_RETRY || err == nil
-		if !done {
-			log.Println("Could not connect to the DB, retrying...")
-			time.Sleep(3 * time.Second)
-		} else {
-			log.Println("Connected to the DB")
-		}
-	}
-	if err != nil {
-		return err
-	}
-	_, err = storage.db.ExecContext(storage.ctx, CREATE_TABLES)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-func (storage *SqlStorage) send(message Message) (int, error) {
-	stmt, err := storage.db.Prepare(SAVE_MESSAGES)
-	if err != nil {
-		return 0, err
-	}
-	id := 0
+func (storage *TTStorage) send(message Message) (int, error) {
 	jsonData, err := json.Marshal(message.Content)
-	err = stmt.QueryRow(message.Sender, jsonData).Scan(&id)
+	resp, err := storage.db.Insert("messages", []interface{}{nil, string(jsonData), message.Sender})
 	if err != nil {
 		return 0, err
 	}
-	stmt.Close()
-	stmt, err = storage.db.Prepare(SAVE_RECV)
-	if err != nil {
-		return 0, err
-	}
+	message_id := resp.Data[0].([]interface{})[0]
 	count := 0
 	for i := 0; i < len(message.Receivers); i++ {
-		_, err = stmt.Exec(message.Receivers[i], id)
+		_, err := storage.db.Insert("receivers", []interface{}{message_id, message.Receivers[i], false})
 		if err == nil {
 			count = count + 1
 		}
 	}
-	stmt.Close()
 	return count, nil
 }
 
-func (storage *SqlStorage) read(who string, onlyUnread bool) ([]ReadAll, error) {
-	query := READ_ALL_RECV
-	if onlyUnread {
-		query = READ_UNREAD_RECV
-	}
-	rows, err := storage.db.Query(query, who)
+func (storage *TTStorage) read(who string, onlyUnread bool) ([]ReadAll, error) {
+	resp, err := storage.db.Select("receivers", "receivers_idx", 0, 4096, tarantool.IterEq, []interface{}{who})
+	messages := make([]ReadAll, 0, 5)
 	if err != nil {
-		return nil, err
+		return messages, err
 	}
-	defer rows.Close()
-	var messages []ReadAll
+	for _, d := range resp.Data {
+		id := d.([]interface{})[0]
+		resp2, err := storage.db.Select("messages", "primary", 0, 4096, tarantool.IterEq, []interface{}{id})
+		dataRead := resp2.Data[0].([]interface{})
 
-	// Loop through rows, using Scan to assign column data to struct fields.
-	for rows.Next() {
-		var current ReadAll
-		var data []byte
-		if err := rows.Scan(&current.Id, &current.Sender, &data, &current.Read); err != nil {
-			return messages, err
+		// read flag could be null
+		var read bool
+		if len(d.([]interface{})) >= 3 {
+			read = d.([]interface{})[2].(bool)
+		} else {
+			read = false
 		}
-		err := json.Unmarshal(data, &current.Content)
+		current := ReadAll{
+			Id: int(dataRead[0].(uint64)),
+			Sender: dataRead[2].(string),
+			Read: read,
+		}
+		err = json.Unmarshal([]byte(dataRead[1].(string)), &current.Content)
 		if err != nil {
 			return messages, err
 		}
 		messages = append(messages, current)
 	}
-	if err = rows.Err(); err != nil {
-		return messages, err
-	}
-
 	return messages, nil
 }
 
-func (storage *SqlStorage) set(who string, message_id int, read bool) error {
-	stmt, err := storage.db.Prepare(UPDATE_READ_RECV)
+func (storage *TTStorage) set(who string, message_id int, read bool) error {
+	resp, err := storage.db.Update("receivers", "primary", []interface{}{uint64(message_id), who}, []interface{}{[]interface{}{"=", 2, read}})
 	if err != nil {
-		return err
-	}
-	if _, err := stmt.Exec(read, who, message_id); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (storage *SqlStorage) countUnread(who string) (int, error) {
-	stmt, err := storage.db.Prepare(COUNT_UNREAD_RECV)
-	if err != nil {
-		return 0, err
-	}
-	var count int
-	err = stmt.QueryRow(who).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+func (storage *TTStorage) countUnread(who string) (int, error) {
+	return 0, nil
 }
