@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"encoding/json"
 	//"time"
 	"github.com/tarantool/go-tarantool"
@@ -21,11 +20,11 @@ type ReadAll struct {
 
 const MAX_RETRY int = 10
 
-func (storage *TTStorage) init(connectionStr string) error {
+func (storage *TTStorage) init(host, user, pass string) error {
 	var err error
-	storage.db, err = tarantool.Connect("127.0.0.1:3500", tarantool.Opts{
-		User: "inbox",
-		Pass: "inbox",
+	storage.db, err = tarantool.Connect(host, tarantool.Opts{
+		User: user,
+		Pass: pass,
 	})
 	if err != nil {
 		return err
@@ -52,7 +51,13 @@ func (storage *TTStorage) send(message Message) (int, error) {
 }
 
 func (storage *TTStorage) read(who string, onlyUnread bool) ([]ReadAll, error) {
-	resp, err := storage.db.Select("receivers", "receivers_idx", 0, 4096, tarantool.IterEq, []interface{}{who})
+	var filter []interface{}
+	if onlyUnread {
+		filter = []interface{}{who, false}
+	} else {
+		filter = []interface{}{who}
+	}
+	resp, err := storage.db.Select("receivers", "receivers_idx", 0, 4096, tarantool.IterEq, filter)
 	messages := make([]ReadAll, 0, 5)
 	if err != nil {
 		return messages, err
@@ -84,13 +89,20 @@ func (storage *TTStorage) read(who string, onlyUnread bool) ([]ReadAll, error) {
 }
 
 func (storage *TTStorage) set(who string, message_id int, read bool) error {
-	resp, err := storage.db.Update("receivers", "primary", []interface{}{uint64(message_id), who}, []interface{}{[]interface{}{"=", 2, read}})
+	_, err := storage.db.Update("receivers", "primary", []interface{}{uint64(message_id), who}, []interface{}{[]interface{}{"=", 2, read}})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+const LIMIT_MSG = 100
+
 func (storage *TTStorage) countUnread(who string) (int, error) {
-	return 0, nil
+	resp, err := storage.db.Select("receivers", "receivers_idx", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{who, false})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(resp.Data), nil
 }

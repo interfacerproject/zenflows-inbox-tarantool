@@ -16,9 +16,11 @@ import (
 )
 
 type Config struct {
-	Port  int
-	Host  string
-	DBUrl string
+	port  int
+	host  string
+	ttHost string
+	ttUser string
+	ttPass string
 }
 
 type Message struct {
@@ -265,9 +267,11 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 func loadEnvConfig() Config {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	return Config{
-		Host:  os.Getenv("HOST"),
-		Port:  port,
-		DBUrl: os.Getenv("DB_URL"),
+		host:  os.Getenv("HOST"),
+		port:  port,
+		ttHost: os.Getenv("TT_HOST"),
+		ttUser: os.Getenv("TT_USER"),
+		ttPass: os.Getenv("TT_PASS"),
 	}
 }
 
@@ -275,7 +279,7 @@ func main() {
 	config := loadEnvConfig()
 
 	storage := &TTStorage{}
-	err := storage.init(config.DBUrl)
+	err := storage.init(config.ttHost, config.ttUser, config.ttPass)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -294,7 +298,7 @@ func main() {
 	})
 
 	handler := c.Handler(mux)
-	host := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	host := fmt.Sprintf("%s:%d", config.host, config.port)
 	log.Printf("Starting service on %s\n", host)
 	log.Fatal(http.ListenAndServe(host, handler))
 }

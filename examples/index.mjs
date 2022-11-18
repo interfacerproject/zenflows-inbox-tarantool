@@ -4,14 +4,14 @@ import { zencode_exec } from 'zenroom';
 import axios from 'axios';
 
 const PIPPO_EDDSA = "AEkxhh4aFV1eG88FY8LjZSMyJXgmynUdWzUPV6tCHwqn"
-const PIPPO_ID = "0620YFM3DCC74PEK6VYH32EF10"
+const PIPPO_ID = "0628NSX9090P3BHACQT3QRQ26C"
 const PLUTO_EDDSA = "6M3sJz56689qf67xhKyfT3Lf19eiq1xWXhmtzBipdW3n"
-const PLUTO_ID = "061TQRJG3RP9YN9HVXH6BMXK5W"
+const PLUTO_ID = "0628NT65C5MFPBCHGYGEP3C5QW"
 const PAPERINO_EDDSA = "88XLEXAkTdxdm4r8V5gYFPQxvqgMvWu4EHXKSMbXenzC"
-const PAPERINO_ID = "0620WKRGKNHDVRHGFYWPYM0GQ0"
+const PAPERINO_ID = "0628NTE1HV4RTXZW8PJSBY447G"
 
-//const url="http://localhost:5000"
-const url="https://gateway0.interfacer.dyne.org/inbox"
+const url="http://localhost:5000"
+//const url="https://gateway0.interfacer.dyne.org/inbox"
 
 const signRequest = async (json, key) => {
 	const data = `{"gql": "${Buffer.from(json, 'utf8').toString('base64')}"}`
@@ -39,6 +39,7 @@ const sendMessage = async (message) => {
     };
 
     const result = await axios.post(`${url}/send`, request, config);
+    console.log(result.data)
     return result
 }
 
@@ -109,7 +110,8 @@ const countMessages = async(receiver, key) => {
     return result
 }
 //await assertPostMany()
-assertReadMany(PLUTO_ID, PLUTO_EDDSA)
+await assertReadMany(PLUTO_ID, PLUTO_EDDSA)
 //assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
-//setMessage(10, PLUTO_ID, true, PLUTO_EDDSA)
+//setMessage(7, PLUTO_ID, true, PLUTO_EDDSA)
+//console.log(await countMessages(PAPERINO_ID, PAPERINO_EDDSA))
 //console.log(await countMessages(PLUTO_ID, PLUTO_EDDSA))
