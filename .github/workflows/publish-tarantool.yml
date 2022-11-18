@@ -12,8 +12,6 @@ name: Create and publish a Docker image of the db
 on:
   push:
     branches: ['main']
-    paths:
-      - Dockerfile.tarantool
 
 env:
   REGISTRY: ghcr.io
