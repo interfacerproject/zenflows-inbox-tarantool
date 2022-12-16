@@ -21,6 +21,7 @@ type Config struct {
 	ttHost string
 	ttUser string
 	ttPass string
+	zfUrl string
 }
 
 type Message struct {
@@ -38,6 +39,7 @@ type Storage interface {
 
 type Inbox struct {
 	storage Storage
+	zfUrl string
 }
 
 //go:embed zenflows-crypto/src/verify_graphql.zen
@@ -87,7 +89,7 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = "Empty content"
 		return
 	}
-	zenroomData.requestPublicKey(message.Sender)
+	zenroomData.requestPublicKey(inbox.zfUrl, message.Sender)
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -141,7 +143,7 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(readMessage.Receiver)
+	zenroomData.requestPublicKey(inbox.zfUrl, readMessage.Receiver)
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -195,7 +197,7 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(setMessage.Receiver)
+	zenroomData.requestPublicKey(inbox.zfUrl, setMessage.Receiver)
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -245,7 +247,7 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(countMessages.Receiver)
+	zenroomData.requestPublicKey(inbox.zfUrl, countMessages.Receiver)
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -272,6 +274,7 @@ func loadEnvConfig() Config {
 		ttHost: os.Getenv("TT_HOST"),
 		ttUser: os.Getenv("TT_USER"),
 		ttPass: os.Getenv("TT_PASS"),
+		zfUrl: os.Getenv("ZENFLOWS_URL"),
 	}
 }
 
@@ -283,7 +286,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	inbox := &Inbox{storage: storage}
+	inbox := &Inbox{storage: storage, zfUrl: config.zfUrl}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", inbox.sendHandler)

@@ -24,14 +24,14 @@ type ZenroomResult struct {
 }
 
 // Fills ZenroomData with the public key requested to zenflows (from the email)
-func (data *ZenroomData) requestPublicKey(id string) error {
+func (data *ZenroomData) requestPublicKey(url string, id string) error {
 	query, err := json.Marshal(map[string]interface{}{
 		"query": GQL_PERSON_PUBKEY,
 		"variables": map[string]string{
 			"id": id,
 		},
 	})
-	resp, err := http.Post("http://fcos.interfacer.dyne.org:9000/api", "application/json", bytes.NewReader(query))
+	resp, err := http.Post(url, "application/json", bytes.NewReader(query))
 	if err != nil {
 		return err
 	}
