@@ -41,6 +41,9 @@ func (data *ZenroomData) requestPublicKey(url string, id string) error {
 	}
 	var result map[string]map[string]string
 	json.Unmarshal(body, &result)
+	if result["data"]["personPubkey"] == "" {
+		return errors.New(string(body))
+	}
 	data.EdDSAPublicKey = result["data"]["personPubkey"]
 	return nil
 }

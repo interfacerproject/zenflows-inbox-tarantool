@@ -89,7 +89,12 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = "Empty content"
 		return
 	}
-	zenroomData.requestPublicKey(inbox.zfUrl, message.Sender)
+	err = zenroomData.requestPublicKey(inbox.zfUrl, message.Sender)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -143,7 +148,12 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(inbox.zfUrl, readMessage.Receiver)
+	err = zenroomData.requestPublicKey(inbox.zfUrl, readMessage.Receiver)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -197,7 +207,12 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(inbox.zfUrl, setMessage.Receiver)
+	err = zenroomData.requestPublicKey(inbox.zfUrl, setMessage.Receiver)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -247,7 +262,12 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 		result["error"] = err.Error()
 		return
 	}
-	zenroomData.requestPublicKey(inbox.zfUrl, countMessages.Receiver)
+	err = zenroomData.requestPublicKey(inbox.zfUrl, countMessages.Receiver)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
 	err = zenroomData.isAuth()
 	if err != nil {
 		result["success"] = false
@@ -280,6 +300,7 @@ func loadEnvConfig() Config {
 
 func main() {
 	config := loadEnvConfig()
+	log.Printf("Using backend %s\n", config.zfUrl)
 
 	storage := &TTStorage{}
 	err := storage.init(config.ttHost, config.ttUser, config.ttPass)
