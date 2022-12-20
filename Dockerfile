@@ -1,5 +1,3 @@
-FROM debian:bullseye
-
 FROM golang:1.19-bullseye AS builder
 RUN apt update && apt install -y build-essential git cmake vim python3 python3-pip zsh libssl-dev \
         && pip3 install meson ninja \
@@ -9,7 +7,7 @@ ADD . /app
 WORKDIR /app
 RUN go build inbox.go zenflows-auth.go storage.go
 
-FROM debian:bullseye
+FROM dyne/devuan:chimaera
 WORKDIR /root
 ENV HOST=0.0.0.0
 ENV PORT=80

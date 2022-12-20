@@ -9,7 +9,7 @@ services:
         TT_HOST: "db:3500"
         TT_USER: "inbox"
         TT_PASS: "inbox"
-        ZENFLOWS_URL: "http://fcos.interfacer.dyne.org:9000/api"
+        ZENFLOWS_URL: "https://zenflows-test.interfacer.dyne.org/api"
       depends_on:
         - db
   db:
