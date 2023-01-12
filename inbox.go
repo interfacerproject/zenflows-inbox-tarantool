@@ -35,6 +35,7 @@ type Storage interface {
 	read(string, bool) ([]ReadAll, error)
 	set(string, int, bool) error
 	countUnread(string) (int, error)
+	delete(string, int) error
 }
 
 type Inbox struct {
@@ -286,6 +287,62 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+type DeleteMessage struct {
+	MessageId int    `json:"message_id"`
+	Receiver  string `json:"receiver"`
+}
+
+func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
+	// Setup json response
+	w.Header().Set("Content-Type", "application/json")
+	enableCors(&w)
+	result := map[string]interface{}{
+		"success": false,
+	}
+	defer json.NewEncoder(w).Encode(result)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+
+	// Verify signature request
+	zenroomData := ZenroomData{
+		Gql:            b64.StdEncoding.EncodeToString(body),
+		EdDSASignature: r.Header.Get("zenflows-sign"),
+	}
+	var deleteMessage DeleteMessage
+	err = json.Unmarshal(body, &deleteMessage)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+	err = zenroomData.requestPublicKey(inbox.zfUrl, deleteMessage.Receiver)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+	err = zenroomData.isAuth()
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+	err = inbox.storage.delete(deleteMessage.Receiver, deleteMessage.MessageId)
+	if err != nil {
+		result["success"] = false
+		result["error"] = err.Error()
+		return
+	}
+
+	result["success"] = true
+	return
+}
+
 func loadEnvConfig() Config {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	return Config{
@@ -314,6 +371,7 @@ func main() {
 	mux.HandleFunc("/read", inbox.readHandler)
 	mux.HandleFunc("/set-read", inbox.setHandler)
 	mux.HandleFunc("/count-unread", inbox.countHandler)
+	mux.HandleFunc("/delete", inbox.deleteHandler)
 
 	c := cors.New(cors.Options{
 		AllowOriginFunc:  func(origin string) bool { return true },

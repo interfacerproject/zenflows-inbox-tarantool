@@ -106,3 +106,11 @@ func (storage *TTStorage) countUnread(who string) (int, error) {
 
 	return len(resp.Data), nil
 }
+
+func (storage *TTStorage) delete(who string, message_id int) error {
+	_, err := storage.db.Delete("receivers", "primary", []interface{}{uint64(message_id), who})
+	if err != nil {
+		return err
+	}
+	return nil
+}
