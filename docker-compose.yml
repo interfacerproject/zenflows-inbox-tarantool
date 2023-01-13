@@ -17,3 +17,7 @@ services:
       dockerfile: Dockerfile.tarantool
       context: .
     restart: always
+    volumes:
+      - tt_data:/var/lib/tarantool
+volumes:
+  tt_data:
