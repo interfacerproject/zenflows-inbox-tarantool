@@ -351,7 +351,7 @@ func loadEnvConfig() Config {
 		ttHost: os.Getenv("TT_HOST"),
 		ttUser: os.Getenv("TT_USER"),
 		ttPass: os.Getenv("TT_PASS"),
-		zfUrl: os.Getenv("ZENFLOWS_URL"),
+		zfUrl: fmt.Sprintf("%s/api", os.Getenv("ZENFLOWS_URL")),
 	}
 }
 
