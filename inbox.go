@@ -1,28 +1,30 @@
-//go:build ignore
-
 package main
 
 import (
+	"context"
 	_ "embed"
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-contrib/cors"
+
+	"github.com/go-fed/activity/streams"
+	"github.com/go-fed/activity/streams/vocab"
 )
 
 type Config struct {
-	port  int
-	host  string
+	port   int
+	host   string
 	ttHost string
 	ttUser string
 	ttPass string
-	zfUrl string
+	zfUrl  string
 }
 
 type Message struct {
@@ -40,28 +42,29 @@ type Storage interface {
 }
 
 type Inbox struct {
-	storage Storage
-	zfUrl string
+	storage       Storage
+	zfUrl         string
+	zenflowsAgent ZenflowsAgent
 }
 
 //go:embed zenflows-crypto/src/verify_graphql.zen
 var VERIFY string
 
-func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
+func (inbox *Inbox) sendHandler(c *gin.Context) {
 	// Setup json response
 	result := map[string]interface{}{
 		"success": false,
 	}
 	defer c.JSON(http.StatusOK, result)
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = "Could not read the body of the request"
 		return
 	}
 	zenroomData := ZenroomData{
 		Gql:            b64.StdEncoding.EncodeToString(body),
-		EdDSASignature: r.Header.Get("zenflows-sign"),
+		EdDSASignature: c.Request.Header.Get("zenflows-sign"),
 	}
 
 	// Read a message object, I need the receivers
@@ -109,14 +112,14 @@ type ReadMessages struct {
 	OnlyUnread bool   `json:"only_unread"`
 }
 
-func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
+func (inbox *Inbox) readHandler(c *gin.Context) {
 	// Setup json response
 	result := map[string]interface{}{
 		"success": false,
 	}
 	defer c.JSON(http.StatusOK, result)
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = err.Error()
 		return
@@ -125,7 +128,7 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify signature request
 	zenroomData := ZenroomData{
 		Gql:            b64.StdEncoding.EncodeToString(body),
-		EdDSASignature: r.Header.Get("zenflows-sign"),
+		EdDSASignature: c.Request.Header.Get("zenflows-sign"),
 	}
 	var readMessage ReadMessages
 	err = json.Unmarshal(body, &readMessage)
@@ -161,14 +164,14 @@ type SetMessage struct {
 	Read      bool   `json:"read"`
 }
 
-func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
+func (inbox *Inbox) setHandler(c *gin.Context) {
 	// Setup json response
 	result := map[string]interface{}{
 		"success": false,
 	}
 	defer c.JSON(http.StatusOK, result)
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = err.Error()
 		return
@@ -177,7 +180,7 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify signature request
 	zenroomData := ZenroomData{
 		Gql:            b64.StdEncoding.EncodeToString(body),
-		EdDSASignature: r.Header.Get("zenflows-sign"),
+		EdDSASignature: c.Request.Header.Get("zenflows-sign"),
 	}
 	var setMessage SetMessage
 	err = json.Unmarshal(body, &setMessage)
@@ -206,17 +209,17 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type CountMessages struct {
-	Receiver  string `json:"receiver"`
+	Receiver string `json:"receiver"`
 }
 
-func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
+func (inbox *Inbox) countHandler(c *gin.Context) {
 	// Setup json response
 	result := map[string]interface{}{
 		"success": false,
 	}
 	defer c.JSON(http.StatusOK, result)
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = err.Error()
 		return
@@ -225,7 +228,7 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify signature request
 	zenroomData := ZenroomData{
 		Gql:            b64.StdEncoding.EncodeToString(body),
-		EdDSASignature: r.Header.Get("zenflows-sign"),
+		EdDSASignature: c.Request.Header.Get("zenflows-sign"),
 	}
 	var countMessages CountMessages
 	err = json.Unmarshal(body, &countMessages)
@@ -259,14 +262,14 @@ type DeleteMessage struct {
 	Receiver  string `json:"receiver"`
 }
 
-func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
+func (inbox *Inbox) deleteHandler(c *gin.Context) {
 	// Setup json response
 	result := map[string]interface{}{
 		"success": false,
 	}
 	defer c.JSON(http.StatusOK, result)
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = err.Error()
 		return
@@ -275,7 +278,7 @@ func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify signature request
 	zenroomData := ZenroomData{
 		Gql:            b64.StdEncoding.EncodeToString(body),
-		EdDSASignature: r.Header.Get("zenflows-sign"),
+		EdDSASignature: c.Request.Header.Get("zenflows-sign"),
 	}
 	var deleteMessage DeleteMessage
 	err = json.Unmarshal(body, &deleteMessage)
@@ -303,15 +306,50 @@ func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func (inbox *Inbox) profileHandler(c *gin.Context) {
+	id := c.Param("id")
+
+	baseUrl := fmt.Sprintf("%s/%s", os.Getenv("BASE_URL"), id)
+	zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
+	if err != nil {
+		panic(err)
+	}
+
+	m := map[string]interface{}{
+		"@context": "https://www.w3.org/ns/activitystreams",
+		"id":       baseUrl,
+		"name":     zfPerson.Name,
+		"inbox":    baseUrl + "/inbox",
+		"outbox":   baseUrl + "/outbox",
+		"type":     "Person",
+		"summary":  zfPerson.Note,
+	}
+	var person vocab.ActivityStreamsPerson
+	resolver, _ := streams.NewJSONResolver(func(c context.Context, p vocab.ActivityStreamsPerson) error {
+		// Store the person in the enclosing scope, for later.
+		person = p
+		return nil
+	}, func(c context.Context, note vocab.ActivityStreamsNote) error {
+		// We can treat the type differently.
+		fmt.Println(note)
+		return nil
+	})
+	ctx := context.Background()
+	resolver.Resolve(ctx, m)
+	var jsonmap map[string]interface{}
+	jsonmap, _ = streams.Serialize(person) // WARNING: Do not call the Serialize() method on person
+	c.JSON(http.StatusOK, jsonmap)
+
+}
 func loadEnvConfig() Config {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	return Config{
-		host:  os.Getenv("HOST"),
-		port:  port,
+		host:   os.Getenv("HOST"),
+		port:   port,
 		ttHost: os.Getenv("TT_HOST"),
 		ttUser: os.Getenv("TT_USER"),
 		ttPass: os.Getenv("TT_PASS"),
-		zfUrl: fmt.Sprintf("%s/api", os.Getenv("ZENFLOWS_URL")),
+		zfUrl:  fmt.Sprintf("%s/api", os.Getenv("ZENFLOWS_URL")),
 	}
 }
 
@@ -319,14 +357,24 @@ func main() {
 	config := loadEnvConfig()
 	log.Printf("Using backend %s\n", config.zfUrl)
 
+	za := ZenflowsAgent{
+		Sk:          os.Getenv("ZENFLOWS_SK"),
+		ZenflowsUrl: config.zfUrl,
+	}
+
 	storage := &TTStorage{}
 	err := storage.init(config.ttHost, config.ttUser, config.ttPass)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	inbox := &Inbox{storage: storage, zfUrl: config.zfUrl}
+	inbox := &Inbox{
+		storage:       storage,
+		zfUrl:         config.zfUrl,
+		zenflowsAgent: za,
+	}
 
 	r := gin.Default()
+	r.Use(cors.Default())
 
 	r.POST("/send", inbox.sendHandler)
 	r.POST("/read", inbox.readHandler)
@@ -334,8 +382,9 @@ func main() {
 	r.POST("/count-unread", inbox.countHandler)
 	r.POST("/delete", inbox.deleteHandler)
 
-	router.Use(cors.Default())
+	r.GET("/social/:id", inbox.profileHandler)
+
 	host := fmt.Sprintf("%s:%d", config.host, config.port)
 	log.Printf("Starting service on %s\n", host)
-	router.Run(host)
+	r.Run()
 }

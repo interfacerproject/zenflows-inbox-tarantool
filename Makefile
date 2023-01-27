@@ -1,2 +1,2 @@
 all:
-	go build inbox.go zenflows-auth.go storage.go
+	go build -o inbox .

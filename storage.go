@@ -8,7 +8,7 @@ import (
 )
 
 type TTStorage struct {
-	db  *tarantool.Connection
+	db *tarantool.Connection
 }
 
 type ReadAll struct {
@@ -75,9 +75,9 @@ func (storage *TTStorage) read(who string, onlyUnread bool) ([]ReadAll, error) {
 			read = false
 		}
 		current := ReadAll{
-			Id: int(dataRead[0].(uint64)),
+			Id:     int(dataRead[0].(uint64)),
 			Sender: dataRead[2].(string),
-			Read: read,
+			Read:   read,
 		}
 		err = json.Unmarshal([]byte(dataRead[1].(string)), &current.Content)
 		if err != nil {
