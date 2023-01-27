@@ -7,12 +7,13 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/cors"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 )
 
 type Config struct {
@@ -46,22 +47,15 @@ type Inbox struct {
 //go:embed zenflows-crypto/src/verify_graphql.zen
 var VERIFY string
 
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
-}
-
 func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
-	w.Header().Set("Content-Type", "application/json")
-	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
-	defer json.NewEncoder(w).Encode(result)
+	defer c.JSON(http.StatusOK, result)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		result["success"] = false
 		result["error"] = "Could not read the body of the request"
 		return
 	}
@@ -74,31 +68,26 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 	var message Message
 	err = json.Unmarshal(body, &message)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 
 	if len(message.Receivers) == 0 {
-		result["success"] = false
 		result["error"] = "No receivers"
 		return
 	}
 
 	if len(message.Content) == 0 {
-		result["success"] = false
 		result["error"] = "Empty content"
 		return
 	}
 	err = zenroomData.requestPublicKey(inbox.zfUrl, message.Sender)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.isAuth()
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -106,7 +95,6 @@ func (inbox *Inbox) sendHandler(w http.ResponseWriter, r *http.Request) {
 	// For each receiver put the message in the inbox
 	count, err := inbox.storage.send(message)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -123,16 +111,13 @@ type ReadMessages struct {
 
 func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
-	w.Header().Set("Content-Type", "application/json")
-	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
-	defer json.NewEncoder(w).Encode(result)
+	defer c.JSON(http.StatusOK, result)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -145,25 +130,21 @@ func (inbox *Inbox) readHandler(w http.ResponseWriter, r *http.Request) {
 	var readMessage ReadMessages
 	err = json.Unmarshal(body, &readMessage)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.requestPublicKey(inbox.zfUrl, readMessage.Receiver)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.isAuth()
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	messages, err := inbox.storage.read(readMessage.Receiver, readMessage.OnlyUnread)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -182,16 +163,13 @@ type SetMessage struct {
 
 func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
-	w.Header().Set("Content-Type", "application/json")
-	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
-	defer json.NewEncoder(w).Encode(result)
+	defer c.JSON(http.StatusOK, result)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -204,25 +182,21 @@ func (inbox *Inbox) setHandler(w http.ResponseWriter, r *http.Request) {
 	var setMessage SetMessage
 	err = json.Unmarshal(body, &setMessage)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.requestPublicKey(inbox.zfUrl, setMessage.Receiver)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.isAuth()
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = inbox.storage.set(setMessage.Receiver, setMessage.MessageId, setMessage.Read)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -237,16 +211,13 @@ type CountMessages struct {
 
 func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
-	w.Header().Set("Content-Type", "application/json")
-	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
-	defer json.NewEncoder(w).Encode(result)
+	defer c.JSON(http.StatusOK, result)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -259,25 +230,21 @@ func (inbox *Inbox) countHandler(w http.ResponseWriter, r *http.Request) {
 	var countMessages CountMessages
 	err = json.Unmarshal(body, &countMessages)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.requestPublicKey(inbox.zfUrl, countMessages.Receiver)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.isAuth()
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	count, err := inbox.storage.countUnread(countMessages.Receiver)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -294,16 +261,13 @@ type DeleteMessage struct {
 
 func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	// Setup json response
-	w.Header().Set("Content-Type", "application/json")
-	enableCors(&w)
 	result := map[string]interface{}{
 		"success": false,
 	}
-	defer json.NewEncoder(w).Encode(result)
+	defer c.JSON(http.StatusOK, result)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -316,25 +280,21 @@ func (inbox *Inbox) deleteHandler(w http.ResponseWriter, r *http.Request) {
 	var deleteMessage DeleteMessage
 	err = json.Unmarshal(body, &deleteMessage)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.requestPublicKey(inbox.zfUrl, deleteMessage.Receiver)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = zenroomData.isAuth()
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
 	err = inbox.storage.delete(deleteMessage.Receiver, deleteMessage.MessageId)
 	if err != nil {
-		result["success"] = false
 		result["error"] = err.Error()
 		return
 	}
@@ -366,21 +326,16 @@ func main() {
 	}
 	inbox := &Inbox{storage: storage, zfUrl: config.zfUrl}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/send", inbox.sendHandler)
-	mux.HandleFunc("/read", inbox.readHandler)
-	mux.HandleFunc("/set-read", inbox.setHandler)
-	mux.HandleFunc("/count-unread", inbox.countHandler)
-	mux.HandleFunc("/delete", inbox.deleteHandler)
+	r := gin.Default()
 
-	c := cors.New(cors.Options{
-		AllowOriginFunc:  func(origin string) bool { return true },
-		AllowCredentials: true,
-		AllowedHeaders:   []string{"Zenflows-Sign"},
-	})
+	r.POST("/send", inbox.sendHandler)
+	r.POST("/read", inbox.readHandler)
+	r.POST("/set-read", inbox.setHandler)
+	r.POST("/count-unread", inbox.countHandler)
+	r.POST("/delete", inbox.deleteHandler)
 
-	handler := c.Handler(mux)
+	router.Use(cors.Default())
 	host := fmt.Sprintf("%s:%d", config.host, config.port)
 	log.Printf("Starting service on %s\n", host)
-	log.Fatal(http.ListenAndServe(host, handler))
+	router.Run(host)
 }
