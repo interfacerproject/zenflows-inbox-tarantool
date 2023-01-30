@@ -4,6 +4,7 @@ import (
 	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	zenroom "github.com/dyne/Zenroom/bindings/golang/zenroom"
 	"io"
@@ -29,6 +30,7 @@ Then print 'hash' as 'hex'
 `
 
 const GQL_PERSON string = "query($id: ID!) {person(id: $id) {id name note}}"
+const GQL_ECONOMIC_RESOURCE string = "query($id: ID!) { economicResource(id: $id) { id name note}}"
 
 type ZenflowsAgent struct {
 	Sk          string
@@ -63,6 +65,29 @@ func (za *ZenflowsAgent) GetPerson(id string) (*ZenflowsPerson, error) {
 		},
 	})
 
+	body, err := za.makeRequest(query)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]map[string]map[string]string
+	json.Unmarshal(body, &result)
+	if result["data"]["person"] == nil {
+		return nil, errors.New("Error in the response from zenflows")
+	}
+	return &ZenflowsPerson{
+		Id:   result["data"]["person"]["id"],
+		Name: result["data"]["person"]["name"],
+		Note: result["data"]["person"]["note"],
+	}, nil
+}
+
+type ZenflowsEconomicResource struct {
+	Id   string
+	Name string
+	Note string
+}
+
+func (za *ZenflowsAgent) makeRequest(query []byte) ([]byte, error) {
 	r, err := http.NewRequest("POST", za.ZenflowsUrl, bytes.NewReader(query))
 	if err != nil {
 		panic(err)
@@ -73,7 +98,7 @@ func (za *ZenflowsAgent) GetPerson(id string) (*ZenflowsPerson, error) {
 	client := &http.Client{}
 	res, err := client.Do(r)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	defer res.Body.Close()
@@ -82,13 +107,32 @@ func (za *ZenflowsAgent) GetPerson(id string) (*ZenflowsPerson, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(string(body))
+	return body, nil
+}
+
+func (za *ZenflowsAgent) GetEconomicResource(id string) (*ZenflowsEconomicResource, error) {
+	query, err := json.Marshal(map[string]interface{}{
+		"query": GQL_ECONOMIC_RESOURCE,
+		"variables": map[string]string{
+			"id": id,
+		},
+	})
+
+	body, err := za.makeRequest(query)
+	if err != nil {
+		return nil, err
+	}
 
 	var result map[string]map[string]map[string]string
 	json.Unmarshal(body, &result)
-	return &ZenflowsPerson{
-		Id:   result["data"]["person"]["id"],
-		Name: result["data"]["person"]["name"],
-		Note: result["data"]["person"]["Note"],
+
+	if result["data"]["economicResource"] == nil {
+		return nil, errors.New("Error in the response from zenflows")
+	}
+
+	return &ZenflowsEconomicResource{
+		Id:   result["data"]["economicResource"]["id"],
+		Name: result["data"]["economicResource"]["name"],
+		Note: result["data"]["economicResource"]["note"],
 	}, nil
 }

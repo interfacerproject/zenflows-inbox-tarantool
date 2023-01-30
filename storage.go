@@ -96,7 +96,7 @@ func (storage *TTStorage) set(who string, message_id int, read bool) error {
 	return nil
 }
 
-const LIMIT_MSG = 100
+const LIMIT_MSG = 1000
 
 func (storage *TTStorage) countUnread(who string) (int, error) {
 	resp, err := storage.db.Select("receivers", "receivers_idx", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{who, false})
@@ -113,4 +113,35 @@ func (storage *TTStorage) delete(who string, message_id int) error {
 		return err
 	}
 	return nil
+}
+
+func (storage *TTStorage) actorLikes(zfPerson *ZenflowsPerson, rawBody []byte) (uint64, error) {
+	resp, err := storage.db.Insert("likes", []interface{}{nil, zfPerson.Id, string(rawBody)})
+	dataWritten := resp.Data[0].([]interface{})
+	if err != nil {
+		return 0, err
+	}
+	return dataWritten[0].(uint64), nil
+}
+
+func (storage *TTStorage) findActorLike(person *ZenflowsPerson, id uint64) (string, error) {
+	resp, err := storage.db.Select("likes", "actors", 0, 1, tarantool.IterEq, []interface{}{person.Id, id})
+	data := resp.Data[0].([]interface{})
+	if err != nil {
+		return "", err
+	}
+	return data[2].(string), nil
+}
+
+func (storage *TTStorage) findActorLikes(person *ZenflowsPerson) ([]uint64, error) {
+	resp, err := storage.db.Select("likes", "actors", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{person.Id})
+	if err != nil {
+		return nil, err
+	}
+	var ids []uint64
+	for _, d := range resp.Data {
+		id := d.([]interface{})[0].(uint64)
+		ids = append(ids, id)
+	}
+	return ids, nil
 }

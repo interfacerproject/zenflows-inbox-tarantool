@@ -1,22 +1,12 @@
 version: "3"
 services:
-  inbox:
-      build: .
-      working_dir: /app
-      ports:
-        - "5000:80"
-      environment:
-        TT_HOST: "db:3500"
-        TT_USER: "inbox"
-        TT_PASS: "inbox"
-        ZENFLOWS_URL: "https://zenflows-test.interfacer.dyne.org/api"
-      depends_on:
-        - db
   db:
     build:
       dockerfile: Dockerfile.tarantool
       context: .
     restart: always
+    ports:
+      - 3500:3500
     volumes:
       - tt_data:/var/lib/tarantool
 volumes:

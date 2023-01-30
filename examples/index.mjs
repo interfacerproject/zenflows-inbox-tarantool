@@ -124,7 +124,7 @@ const deleteMessage = async(receiver, messageId, key) => {
     const result = await axios.post(`${url}/delete`, request, config);
     return result
 }
-//await assertPostMany()
+await assertPostMany()
 assertReadMany(PLUTO_ID, PLUTO_EDDSA)
 //assertReadMany(PAPERINO_ID, PAPERINO_EDDSA)
 //setMessage(10, PLUTO_ID, true, PLUTO_EDDSA)
