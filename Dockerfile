@@ -15,7 +15,7 @@ COPY go.sum ./
 RUN go mod download
 
 ADD . .
-RUN go build inbox.go zenflows-auth.go storage.go
+RUN go build .
 
 FROM dyne/devuan:chimaera
 WORKDIR /root
