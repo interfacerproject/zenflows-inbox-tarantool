@@ -15,7 +15,7 @@ COPY go.sum ./
 RUN go mod download
 
 ADD . .
-RUN go build .
+RUN go build -o inbox .
 
 FROM dyne/devuan:chimaera
 WORKDIR /root
