@@ -6,7 +6,6 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"io"
 	"log"
@@ -50,6 +49,22 @@ type Inbox struct {
 	storage       Storage
 	zfUrl         string
 	zenflowsAgent ZenflowsAgent
+}
+
+func CORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, zenflows-sign")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }
 
 //go:embed zenflows-crypto/src/verify_graphql.zen
@@ -570,7 +585,8 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.Use(cors.Default())
+	r.SetTrustedProxies(nil)
+	r.Use(CORS())
 
 	r.POST("/send", inbox.sendHandler)
 	r.POST("/read", inbox.readHandler)
