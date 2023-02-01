@@ -24,15 +24,15 @@ local function bootstrap()
         {name='receiver', type='string', is_nullable=false},
         {name="read",type='boolean', is_nullable=false}
     })
-    local like_id = box.schema.sequence.create('like_id',{start=0,min=0,step=1})
-    local likes = box.schema.create_space('likes', {engine = 'vinyl'})
-    likes:create_index('primary', {sequence='like_id'})
-    likes:create_index('actors', { unique=false, parts = {
+    local liked_id = box.schema.sequence.create('liked_id',{start=0,min=0,step=1})
+    local liked = box.schema.create_space('liked', {engine = 'vinyl'})
+    liked:create_index('primary', {sequence='liked_id'})
+    liked:create_index('actors', { unique=false, parts = {
         {field = 2, type = 'string'},
         {field = 1, type = 'unsigned'},
     }})
-    likes:format({
-        {name='like_id', type='unsigned',is_nullable=false},
+    liked:format({
+        {name='liked_id', type='unsigned',is_nullable=false},
         {name='actor_id', type='string',is_nullable=false},
         {name="object",type='string', is_nullable=false}
     })
