@@ -2,9 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	//"time"
+	"errors"
 	"github.com/tarantool/go-tarantool"
-	//"log"
+	"log"
+	"time"
 )
 
 type TTStorage struct {
@@ -20,17 +21,22 @@ type ReadAll struct {
 
 const MAX_RETRY int = 10
 
-func (storage *TTStorage) init(host, user, pass string) error {
+func (storage *TTStorage) Init(host, user, pass string) error {
 	var err error
-	storage.db, err = tarantool.Connect(host, tarantool.Opts{
-		User: user,
-		Pass: pass,
-	})
-	if err != nil {
-		return err
+	for done, retry := false, 0; !done; retry++ {
+		storage.db, err = tarantool.Connect(host, tarantool.Opts{
+			User: user,
+			Pass: pass,
+		})
+		done = retry == MAX_RETRY || err == nil
+		if !done {
+			log.Println("Could not connect to tarantool, retrying...")
+			time.Sleep(3 * time.Second)
+		} else {
+			log.Println("Connected to tarantool")
+		}
 	}
-
-	return nil
+	return err
 }
 
 func (storage *TTStorage) send(message Message) (int, error) {
@@ -115,32 +121,122 @@ func (storage *TTStorage) delete(who string, message_id int) error {
 	return nil
 }
 
-func (storage *TTStorage) actorLikes(zfPerson *ZenflowsPerson, rawBody []byte) (uint64, error) {
-	resp, err := storage.db.Insert("likes", []interface{}{nil, zfPerson.Id, string(rawBody)})
-	dataWritten := resp.Data[0].([]interface{})
+func (storage *TTStorage) actorLikes(activity Activity) (uint64, error) {
+	if activity.Type != "Like" {
+		return 0, errors.New("Not a Like activity")
+	}
+	resp, err := storage.db.Insert("liked", []interface{}{nil, activity.Actor, activity.Object, activity.Summary})
 	if err != nil {
 		return 0, err
+	} else if resp.Error != "" {
+		return 0, errors.New(resp.Error)
 	}
+	dataWritten := resp.Data[0].([]interface{})
+
 	return dataWritten[0].(uint64), nil
 }
 
-func (storage *TTStorage) findActorLike(person *ZenflowsPerson, id uint64) (string, error) {
-	resp, err := storage.db.Select("likes", "actors", 0, 1, tarantool.IterEq, []interface{}{person.Id, id})
-	data := resp.Data[0].([]interface{})
+func (storage *TTStorage) findActorLike(id uint64) (*Activity, error) {
+	resp, err := storage.db.Select("liked", "primary", 0, 1, tarantool.IterEq, []interface{}{id})
 	if err != nil {
-		return "", err
+		return nil, err
+	} else if resp.Error != "" {
+		return nil, errors.New(resp.Error)
 	}
-	return data[2].(string), nil
+	data := resp.Data[0].([]interface{})
+	act := &Activity{
+		Context: "https://www.w3.org/ns/activitystreams",
+		Type:    "Like",
+		Actor:   data[1].(string),
+		Object:  data[2].(string),
+		Summary: data[3].(string),
+	}
+	return act, nil
 }
 
-func (storage *TTStorage) findActorLikes(person *ZenflowsPerson) ([]uint64, error) {
-	resp, err := storage.db.Select("likes", "actors", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{person.Id})
+func (storage *TTStorage) findActorLikes(id string) ([]uint64, error) {
+	resp, err := storage.db.Select("liked", "actors", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{id})
 	if err != nil {
 		return nil, err
 	}
 	var ids []uint64
 	for _, d := range resp.Data {
 		id := d.([]interface{})[0].(uint64)
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func (storage *TTStorage) storeFollower(activity Activity, accepted bool) (bool, uint64, error) {
+	created := false
+	if activity.Type != "Follow" {
+		return false, 0, errors.New("Not a Follow activity")
+	}
+	respRead, err := storage.db.Select("follow", "following", 0, LIMIT_MSG, tarantool.IterEq, []interface{}{activity.Object, activity.Actor})
+	if err != nil {
+		return false, 0, err
+	} else if respRead.Error != "" {
+		return false, 0, errors.New(respRead.Error)
+	}
+	data := respRead.Data
+	var cod uint64
+	if len(data) == 0 {
+		resp, err := storage.db.Insert("follow",
+			[]interface{}{nil, activity.Actor, activity.Object, accepted})
+		if err != nil {
+			return false, 0, err
+		} else if resp.Error != "" {
+			return false, 0, errors.New(resp.Error)
+		}
+		dataWritten := resp.Data[0].([]interface{})
+		cod = dataWritten[0].(uint64)
+		created = true
+	} else {
+		cod = data[0].([]interface{})[0].(uint64)
+		currentAccepted := data[0].([]interface{})[3].(bool)
+		if !currentAccepted && accepted {
+			resp, err := storage.db.Update("follow", "primary",
+				[]interface{}{cod},
+				[]interface{}{[]interface{}{"=", 4, accepted}})
+			if err != nil {
+				return false, 0, err
+			} else if resp.Error != "" {
+				return false, 0, errors.New(resp.Error)
+			}
+		}
+	}
+
+	return created, cod, nil
+}
+
+func (storage *TTStorage) acceptFollower(id uint64) error {
+	resp, err := storage.db.Update("follow", "primary",
+		[]interface{}{id},
+		[]interface{}{[]interface{}{"=", 4, true}})
+	if err != nil {
+		return err
+	} else if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+func (storage *TTStorage) findActorFollows(id string, follower bool) ([]string, error) {
+	idx := "following"
+	pos := 1
+	if follower {
+		idx = "follower"
+		pos = 2
+	}
+	resp, err := storage.db.Select("follow", idx, 0, LIMIT_MSG, tarantool.IterEq, []interface{}{id})
+	if err != nil {
+		return nil, err
+	} else if resp.Error != "" {
+		return nil, errors.New(resp.Error)
+	}
+	var ids []string
+	for _, d := range resp.Data {
+		id := d.([]interface{})[pos].(string)
 		ids = append(ids, id)
 	}
 	return ids, nil

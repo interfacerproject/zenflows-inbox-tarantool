@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	b64 "encoding/base64"
 	"encoding/json"
@@ -13,9 +12,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/go-fed/activity/streams"
-	"github.com/go-fed/activity/streams/vocab"
-	"net/url"
+	"bytes"
+	"errors"
+	//"net/url"
+	"strings"
 )
 
 type Config struct {
@@ -40,9 +40,14 @@ type Storage interface {
 	countUnread(string) (int, error)
 	delete(string, int) error
 
-	actorLikes(*ZenflowsPerson, []byte) (uint64, error)
-	findActorLike(*ZenflowsPerson, uint64) (string, error)
-	findActorLikes(*ZenflowsPerson) ([]uint64, error)
+	actorLikes(Activity) (uint64, error)
+	findActorLike(uint64) (*Activity, error)
+	findActorLikes(string) ([]uint64, error)
+
+	storeFollower(Activity, bool) (bool, uint64, error)
+	acceptFollower(uint64) error
+
+	findActorFollows(string, bool) ([]string, error)
 }
 
 type Inbox struct {
@@ -55,7 +60,7 @@ func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, zenflows-sign")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, zenflows-sign, zenflows-id")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -326,80 +331,72 @@ func (inbox *Inbox) deleteHandler(c *gin.Context) {
 	return
 }
 
-func (inbox *Inbox) profileHandler(c *gin.Context) {
-	result := map[string]interface{}{
-		"success": false,
-	}
-	defer c.JSON(http.StatusOK, result)
-	id := c.Param("id")
+func (inbox *Inbox) profileHandler(actorType string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		result := map[string]interface{}{
+			"success": false,
+		}
+		defer c.JSON(http.StatusOK, result)
+		//actorType := c.Param("type")
+		id := c.Param("id")
 
-	baseUrl := fmt.Sprintf("%s/%s", os.Getenv("BASE_URL"), id)
-	zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
+		baseUrl := fmt.Sprintf("%s/%s/%s", os.Getenv("BASE_URL"), actorType, id)
 
-	m := map[string]interface{}{
-		"@context": "https://www.w3.org/ns/activitystreams",
-		"id":       baseUrl,
-		"name":     zfPerson.Name,
-		"inbox":    baseUrl + "/inbox",
-		"outbox":   baseUrl + "/outbox",
-		"type":     "Person",
-		"summary":  zfPerson.Note,
-	}
-	var person vocab.ActivityStreamsPerson
-	resolver, _ := streams.NewJSONResolver(func(c context.Context, p vocab.ActivityStreamsPerson) error {
-		// Store the person in the enclosing scope, for later.
-		person = p
-		var jsonmap map[string]interface{}
-		jsonmap, _ = streams.Serialize(person) // WARNING: Do not call the Serialize() method on person
-		result["data"] = jsonmap
+		var m map[string]interface{} = nil
+
+		switch actorType {
+		case "person":
+			zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
+			if err != nil {
+				result["error"] = err.Error()
+				return
+			}
+			m = map[string]interface{}{
+				"@context": "https://www.w3.org/ns/activitystreams",
+				"id":       baseUrl,
+				"name":     zfPerson.Name,
+				"inbox":    baseUrl + "/inbox",
+				"outbox":   baseUrl + "/outbox",
+				"type":     "Person",
+				"summary":  zfPerson.Note,
+			}
+		case "economicresource":
+			m = map[string]interface{}{
+				"@context": "https://www.w3.org/ns/activitystreams",
+				"id":       baseUrl,
+				"name":     "er",
+				"summary":  "er",
+				//"type":     "EconomicResource",
+			}
+		default:
+			result["success"] = false
+			result["error"] = "Unknown actor type: " + actorType
+			return
+		}
+
+		result["data"] = m
 		result["success"] = true
-		return nil
-	})
-	ctx := context.Background()
-	resolver.Resolve(ctx, m)
+	}
 }
 
-func (inbox *Inbox) economicResourceHandler(c *gin.Context) {
-	result := map[string]interface{}{
-		"success": false,
-	}
-	defer c.JSON(http.StatusOK, result)
-	id := c.Param("id")
-
-	baseUrl := fmt.Sprintf("%s/economicresource/%s", os.Getenv("BASE_URL"), id)
-	er, err := inbox.zenflowsAgent.GetEconomicResource(id)
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
-
-	m := map[string]interface{}{
-		"@context": "https://www.w3.org/ns/activitystreams",
-		"id":       baseUrl,
-		"name":     er.Name,
-		"summary":  er.Note,
-		//"type":     "EconomicResource",
-	}
-	/*resolver, _ := streams.NewJSONResolver(func(c context.Context, person vocab.ActivityStreamsObject) error {
-		// Store the person in the enclosing scope, for later.
-		var jsonmap map[string]interface{}
-		jsonmap, _ = streams.Serialize(person)
-		result["data"] = jsonmap
-		result["success"] = true
-		return nil
-	})
-	ctx := context.Background()
-	resolver.Resolve(ctx, m)*/
-
-	// TODO: implement custom type EconomicResource
-	result["data"] = m
-	result["success"] = true
+type Activity struct {
+	Context string `json:"@context"`
+	Type    string `json:"type"`
+	Id      string `json:"id"`
+	Actor   string `json:"actor"`
+	Object  string `json:"object"`
+	Summary string `json:"summary"`
 }
 
+// Takes as input an object like
+//
+//	{
+//		"@context": "https://www.w3.org/ns/activitystreams",
+//		"type": "Follow",
+//		"actor": `${url}/person/062TE0H7591KJCVT3DDEMDBF0R`,
+//		"object": `${url}/person/062TE0YPJD392CS1DPV9XWMDXC`,
+//		"published": "2014-09-30T12:34:56Z"
+//	}
 func (inbox *Inbox) outboxPostHandler(c *gin.Context) {
 	result := map[string]interface{}{
 		"success": false,
@@ -414,49 +411,154 @@ func (inbox *Inbox) outboxPostHandler(c *gin.Context) {
 
 	id := c.Param("id")
 
-	baseUrl := fmt.Sprintf("%s/social/%s", os.Getenv("BASE_URL"), id)
-	zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
-	fmt.Println(zfPerson)
+	var activity Activity
+	if err := json.Unmarshal(body, &activity); err != nil {
+		result["error"] = err.Error()
+		return
+	}
+
+	baseUrl := fmt.Sprintf("%s/person/%s", os.Getenv("BASE_URL"), id)
+	/*zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
+	if err != nil {
+		result["error"] = err.Error()
+		return
+	}*/
+
+	switch activity.Type {
+	case "Like":
+		cod, err := inbox.storage.actorLikes(activity)
+		if err != nil {
+			result["error"] = err.Error()
+			return
+		}
+
+		activity.Id = fmt.Sprintf("%s/liked/%d", baseUrl, cod)
+
+		var jsonmap map[string]interface{}
+		tmp, _ := json.Marshal(activity)
+		json.Unmarshal(tmp, &jsonmap)
+
+		result["success"] = true
+		result["result"] = activity
+	case "Follow":
+		if _, cod, err := inbox.storage.storeFollower(activity, false); err != nil {
+			result["error"] = err.Error()
+			return
+		} else {
+			activity.Id = fmt.Sprintf("%s/follower/%d", activity.Actor, cod)
+
+			tmp, _ := json.Marshal(activity)
+
+			otherInbox := fmt.Sprintf("%s/inbox", activity.Object)
+			log.Printf("[APUB] Send follow request to %s\n", otherInbox)
+
+			// TODO: delete stored follow request if the POST fails
+			if resp, err := http.Post(otherInbox, "application/json", bytes.NewReader(tmp)); err != nil {
+				result["error"] = errors.New("Could not deliver follow request")
+				return
+			} else if resp.StatusCode != 200 {
+				result["error"] = errors.New("Non-200 status when follow request was sent")
+				return
+			}
+			result["data"] = activity
+		}
+
+	default:
+		result["error"] = "Unknown activity type"
+	}
+	result["success"] = true
+
+}
+
+func (inbox *Inbox) inboxPostHandler(c *gin.Context) {
+	status := http.StatusInternalServerError
+	result := map[string]interface{}{
+		"success": false,
+	}
+	defer func() {
+		c.JSON(status, result)
+	}()
+
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		result["error"] = err.Error()
 		return
 	}
 
-	var bodyJson map[string]interface{}
-	if err := json.Unmarshal(body, &bodyJson); err != nil {
+	id := c.Param("id")
+	actorType := c.Param("type")
+
+	var activity Activity
+	if err := json.Unmarshal(body, &activity); err != nil {
 		result["error"] = err.Error()
 		return
 	}
 
-	resolver, _ := streams.NewJSONResolver(func(c context.Context, like vocab.ActivityStreamsLike) error {
-		cod, err := inbox.storage.actorLikes(zfPerson, body)
-		if err != nil {
-			return err
+	baseUrl := fmt.Sprintf("%s/%s/%s", os.Getenv("BASE_URL"), actorType, id)
+	/*zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
+	if err != nil {
+		result["error"] = err.Error()
+		return
+	}*/
+
+	switch activity.Type {
+	case "Follow":
+		if _, _, err := inbox.storage.storeFollower(activity, true); err != nil {
+			result["error"] = err.Error()
+			return
 		}
-
-		urlLike, err := url.Parse(fmt.Sprintf("%s/liked/%d", baseUrl, cod))
-		if err != nil {
-			return err
+		acceptActivity := &Activity{
+			Context: "https://www.w3.org/ns/activitystreams",
+			Type:    "Accept",
+			Actor:   activity.Object,
+			Object:  activity.Id,
 		}
-
-		var jsonId vocab.JSONLDIdProperty = streams.NewJSONLDIdProperty()
-		jsonId.Set(urlLike)
-		like.SetJSONLDId(jsonId)
-
 		var jsonmap map[string]interface{}
-		jsonmap, err = streams.Serialize(like)
-		if err != nil {
-			return err
+		tmp, _ := json.Marshal(acceptActivity)
+		json.Unmarshal(tmp, &jsonmap)
+
+		otherInbox := fmt.Sprintf("%s/inbox", activity.Actor)
+		log.Printf("[APUB] Send accept request to %s\n", otherInbox)
+
+		if resp, err := http.Post(otherInbox, "application/json", bytes.NewReader(tmp)); err != nil {
+			result["error"] = errors.New(fmt.Sprintf("Could not deliver follow request: %s", err.Error()))
+			return
+		} else if resp.StatusCode != 200 {
+			bodyResp, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				result["error"] = err.Error()
+				return
+			}
+			log.Println("Accept error: ", bodyResp)
+			result["error"] = errors.New(fmt.Sprintf("Status when follow request was sent: %d", resp.StatusCode))
+			return
 		}
-		result["success"] = true
-		result["result"] = jsonmap
-		return nil
-	})
-	ctx := context.Background()
-	if err := resolver.Resolve(ctx, bodyJson); err != nil {
-		result["error"] = err.Error()
-		return
+		result["data"] = acceptActivity
+	case "Accept":
+		log.Printf("[APUB] I am going to accept %s\n", activity.Object)
+		codStr := strings.TrimPrefix(activity.Object, fmt.Sprintf("%s/follower/", baseUrl))
+		cod, err := strconv.ParseUint(codStr, 10, 64)
+		if err != nil {
+			log.Println("[APUB] Exit with error ", err.Error())
+			result["error"] = err.Error()
+			return
+		}
+		log.Printf("[APUB] Parsed id %d\n", cod)
+		if err := inbox.storage.acceptFollower(cod); err != nil {
+			log.Println(err.Error())
+			result["error"] = err.Error()
+			return
+		}
+		result["data"] = activity
+
+	default:
+		result["error"] = "Unknown activity type"
 	}
+
+	log.Println("Inbox finished")
+	status = http.StatusOK
+	result["success"] = true
+
 }
 
 func (inbox *Inbox) likedHandler(c *gin.Context) {
@@ -466,90 +568,88 @@ func (inbox *Inbox) likedHandler(c *gin.Context) {
 	defer c.JSON(http.StatusOK, result)
 
 	id := c.Param("id")
+	actorType := c.Param("type")
 
-	baseUrl := fmt.Sprintf("%s/social/%s", os.Getenv("BASE_URL"), id)
-	zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
+	baseUrl := fmt.Sprintf("%s/%s/%s", os.Getenv("BASE_URL"), actorType, id)
+
+	likedIds, err := inbox.storage.findActorLikes(baseUrl)
 	if err != nil {
 		result["error"] = err.Error()
 		return
 	}
 
-	likedIds, err := inbox.storage.findActorLikes(zfPerson)
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
-
-	likes := streams.NewActivityStreamsLikesProperty()
-	col := streams.NewActivityStreamsCollection()
-	items := streams.NewActivityStreamsItemsProperty()
+	items := []string{}
 	for i := 0; i < len(likedIds); i = i + 1 {
-		likeUrl, _ := url.Parse(fmt.Sprintf("%s/liked/%d", baseUrl, likedIds[i]))
-		items.AppendIRI(likeUrl)
+		likeUrl := fmt.Sprintf("%s/liked/%d", baseUrl, likedIds[i])
+		items = append(items, likeUrl)
 	}
-	col.SetActivityStreamsItems(items)
-	likes.SetActivityStreamsCollection(col)
 
-	var jsonmap map[string]interface{}
-	jsonmap, _ = streams.Serialize(col) // WARNING: Do not call the Serialize() method on person
+	jsonmap := map[string]interface{}{
+		"@context": "https://www.w3.org/ns/activitystreams",
+		"type":     "Collection",
+		"items":    items,
+	}
 	result["success"] = true
 	result["data"] = jsonmap
 }
 
-func (inbox *Inbox) likedIdHandler(c *gin.Context) {
-	result := map[string]interface{}{
-		"success": false,
-	}
-	defer c.JSON(http.StatusOK, result)
+func (inbox *Inbox) likedIdHandler(actorType string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		result := map[string]interface{}{
+			"success": false,
+		}
+		defer c.JSON(http.StatusOK, result)
 
-	id := c.Param("id")
-	liked := c.Param("liked")
+		id := c.Param("id")
+		liked := c.Param("liked")
 
-	baseUrl := fmt.Sprintf("%s/social/%s", os.Getenv("BASE_URL"), id)
-	zfPerson, err := inbox.zenflowsAgent.GetPerson(id)
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
+		baseUrl := fmt.Sprintf("%s/person/%s", os.Getenv("BASE_URL"), id)
 
-	var likedId uint64 = 0
-	if likedId, err = strconv.ParseUint(liked, 10, 64); err != nil {
-		result["error"] = err.Error()
-		return
-	}
+		var likedId uint64 = 0
+		var err error
+		if likedId, err = strconv.ParseUint(liked, 10, 64); err != nil {
+			result["error"] = err.Error()
+			return
+		}
 
-	likedActivity, err := inbox.storage.findActorLike(zfPerson, likedId)
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
+		likedActivity, err := inbox.storage.findActorLike(likedId)
+		if err != nil {
+			result["error"] = err.Error()
+			return
+		}
 
-	var bodyJson map[string]interface{}
-	if err := json.Unmarshal([]byte(likedActivity), &bodyJson); err != nil {
-		result["error"] = err.Error()
-		return
-	}
-
-	urlLike, err := url.Parse(fmt.Sprintf("%s/liked/%d", baseUrl, likedId))
-	if err != nil {
-		result["error"] = err.Error()
-		return
-	}
-
-	resolver, _ := streams.NewJSONResolver(func(c context.Context, like vocab.ActivityStreamsLike) error {
-		var jsonId vocab.JSONLDIdProperty = streams.NewJSONLDIdProperty()
-		jsonId.Set(urlLike)
-		like.SetJSONLDId(jsonId)
+		likedActivity.Id = fmt.Sprintf("%s/liked/%d", baseUrl, likedId)
 
 		var jsonmap map[string]interface{}
-		jsonmap, _ = streams.Serialize(like) // WARNING: Do not call the Serialize() method on person
+		tmp, _ := json.Marshal(likedActivity)
+		json.Unmarshal(tmp, &jsonmap)
+
 		result["success"] = true
 		result["data"] = jsonmap
-		return nil
-	})
+	}
+}
 
-	ctx := context.Background()
-	resolver.Resolve(ctx, bodyJson) // Last instruction, call a callback defined previously
+func (inbox *Inbox) followHandler(follower bool) func(c *gin.Context) {
+	return func(c *gin.Context) {
+		result := map[string]interface{}{
+			"success": false,
+		}
+		defer c.JSON(http.StatusOK, result)
+
+		id := c.Param("id")
+		actorType := c.Param("type")
+
+		baseUrl := fmt.Sprintf("%s/%s/%s", os.Getenv("BASE_URL"), actorType, id)
+
+		ids, err := inbox.storage.findActorFollows(baseUrl, follower)
+		if err != nil {
+			result["error"] = err.Error()
+			return
+		}
+
+		result["success"] = true
+		result["data"] = ids
+	}
 }
 
 func loadEnvConfig() Config {
@@ -574,7 +674,7 @@ func main() {
 	}
 
 	storage := &TTStorage{}
-	err := storage.init(config.ttHost, config.ttUser, config.ttPass)
+	err := storage.Init(config.ttHost, config.ttUser, config.ttPass)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -594,11 +694,19 @@ func main() {
 	r.POST("/count-unread", inbox.countHandler)
 	r.POST("/delete", inbox.deleteHandler)
 
-	r.GET("/social/:id", inbox.profileHandler)
-	r.POST("/social/:id/outbox", inbox.outboxPostHandler)
-	r.GET("/social/:id/liked", inbox.likedHandler)
-	r.GET("/social/:id/liked/:liked", inbox.likedIdHandler)
-	r.GET("/economicresource/:id", inbox.economicResourceHandler)
+	// TODO: why /:type/:id didn't work????
+	r.GET("/person/:id", inbox.profileHandler("person"))
+	r.GET("/economicresource/:id", inbox.profileHandler("economicresource"))
+
+	r.POST("/:type/:id/inbox", inbox.inboxPostHandler)
+
+	r.POST("/person/:id/outbox", inbox.outboxPostHandler)
+	r.GET("/:type/:id/liked", inbox.likedHandler)
+	r.GET("/person/:id/liked/:liked", inbox.likedIdHandler("person"))
+	r.GET("/economicresource/:id/liked/:liked", inbox.likedIdHandler("economicresource"))
+
+	r.GET("/:type/:id/follower", inbox.followHandler(false))
+	r.GET("/:type/:id/following", inbox.followHandler(true))
 
 	host := fmt.Sprintf("%s:%d", config.host, config.port)
 	log.Printf("Starting service on %s\n", host)

@@ -26,17 +26,37 @@ local function bootstrap()
     })
     local liked_id = box.schema.sequence.create('liked_id',{start=0,min=0,step=1})
     local liked = box.schema.create_space('liked', {engine = 'vinyl'})
-    liked:create_index('primary', {sequence='liked_id'})
-    liked:create_index('actors', { unique=false, parts = {
-        {field = 2, type = 'string'},
-        {field = 1, type = 'unsigned'},
-    }})
     liked:format({
         {name='liked_id', type='unsigned',is_nullable=false},
         {name='actor_id', type='string',is_nullable=false},
-        {name="object",type='string', is_nullable=false}
+        {name="object", type='string', is_nullable=false},
+        {name="summary", type='string'},
     })
+    liked:create_index('primary', {sequence='liked_id'})
+    liked:create_index('actors', { unique=false, parts = {
+        {field = 2, type = 'string'}
+    }})
+    liked:create_index('objects', { unique=false, parts = {
+        {field = 3, type = 'string'}
+    }})
 
+    local follow_id = box.schema.sequence.create('follow_id',{start=0,min=0,step=1})
+    local follow = box.schema.create_space('follow', {engine = 'vinyl'})
+    follow:format({
+        {name='follow_id', type='unsigned',is_nullable=false},
+        {name='follower', type='string',is_nullable=false},
+        {name="following", type='string', is_nullable=false},
+        {name="accepted", type='boolean', is_nullable=false},
+    })
+    follow:create_index('primary', {sequence='follow_id'})
+    follow:create_index('follower', { unique=false, parts = {
+        {field = 2, type = 'string'},
+        {field = 4, type = 'boolean'},
+    }})
+    follow:create_index('following', { unique=true, parts = {
+        {field = 3, type = 'string'},
+        {field = 2, type = 'string'},
+    }})
     -- Comment this if you need fine grained access control (without it, guest
     -- will have access to everything)
     -- box.schema.user.grant('guest', 'read,write,execute', 'universe')
