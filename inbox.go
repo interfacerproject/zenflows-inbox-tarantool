@@ -14,7 +14,6 @@ import (
 
 	"bytes"
 	"errors"
-	//"net/url"
 	"strings"
 )
 
