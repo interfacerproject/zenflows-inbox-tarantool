@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,22 +13,8 @@ import (
 	"os"
 )
 
-const SIGN = `
-Scenario eddsa: sign a graph query
-Given I have a 'base64' named 'gql'
-Given I have a 'keyring'
-
-# Fix Apollo's mingling with query string
-When I remove spaces in 'gql'
-and I compact ascii strings in 'gql'
-
-When I create the eddsa signature of 'gql'
-And I create the hash of 'gql'
-
-Then print 'eddsa signature' as 'base64'
-Then print 'gql' as 'base64'
-Then print 'hash' as 'hex'
-`
+//go:embed zenflows-crypto/src/sign_graphql.zen
+var SIGN string
 
 const GQL_PERSON string = "query($id: ID!) {person(id: $id) {id name note}}"
 const GQL_ECONOMIC_RESOURCE string = "query($id: ID!) { economicResource(id: $id) { id name note}}"

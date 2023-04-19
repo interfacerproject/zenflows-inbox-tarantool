@@ -18,12 +18,14 @@ import (
 )
 
 type Config struct {
-	port   int
-	host   string
-	ttHost string
-	ttUser string
-	ttPass string
-	zfUrl  string
+	port      int
+	host      string
+	ttHost    string
+	ttUser    string
+	ttPass    string
+	zfUrl     string
+	walletUrl string
+	keyring   map[string]string
 }
 
 type Message struct {
@@ -53,6 +55,7 @@ type Inbox struct {
 	storage       Storage
 	zfUrl         string
 	zenflowsAgent ZenflowsAgent
+	walletAgent   WalletAgent
 }
 
 func CORS() gin.HandlerFunc {
@@ -459,13 +462,14 @@ func (inbox *Inbox) outboxPostHandler(c *gin.Context) {
 				result["error"] = errors.New("Non-200 status when follow request was sent")
 				return
 			}
+
+			result["success"] = true
 			result["data"] = activity
 		}
 
 	default:
 		result["error"] = "Unknown activity type"
 	}
-	result["success"] = true
 
 }
 
@@ -502,7 +506,9 @@ func (inbox *Inbox) inboxPostHandler(c *gin.Context) {
 
 	switch activity.Type {
 	case "Follow":
-		if _, _, err := inbox.storage.storeFollower(activity, true); err != nil {
+		var created bool
+		var err error
+		if created, _, err = inbox.storage.storeFollower(activity, true); err != nil {
 			result["error"] = err.Error()
 			return
 		}
@@ -531,6 +537,18 @@ func (inbox *Inbox) inboxPostHandler(c *gin.Context) {
 			log.Println("Accept error: ", bodyResp)
 			result["error"] = errors.New(fmt.Sprintf("Status when follow request was sent: %d", resp.StatusCode))
 			return
+		}
+
+		// Update balance only if this is a new follower (or has just accepted)
+		if created {
+			// TODO(important): implement queue to manage error cases
+			if err := inbox.walletAgent.AddIdeaPoints(100, id); err != nil {
+				log.Println("Failed transfer of tokens")
+				result["error"] = err.Error()
+				return
+			}
+		} else {
+			log.Println(activity.Actor, " already follows ", activity.Object)
 		}
 		result["data"] = acceptActivity
 	case "Accept":
@@ -652,14 +670,24 @@ func (inbox *Inbox) followHandler(follower bool) func(c *gin.Context) {
 }
 
 func loadEnvConfig() Config {
+	var keyring map[string]string
+	keyringJson, err := b64.StdEncoding.DecodeString(os.Getenv("KEYRING"))
+	if err != nil {
+		panic(err)
+	}
+	if err := json.Unmarshal([]byte(keyringJson), &keyring); err != nil {
+		panic(err)
+	}
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	return Config{
-		host:   os.Getenv("HOST"),
-		port:   port,
-		ttHost: os.Getenv("TT_HOST"),
-		ttUser: os.Getenv("TT_USER"),
-		ttPass: os.Getenv("TT_PASS"),
-		zfUrl:  fmt.Sprintf("%s/api", os.Getenv("ZENFLOWS_URL")),
+		host:      os.Getenv("HOST"),
+		port:      port,
+		ttHost:    os.Getenv("TT_HOST"),
+		ttUser:    os.Getenv("TT_USER"),
+		ttPass:    os.Getenv("TT_PASS"),
+		zfUrl:     fmt.Sprintf("%s/api", os.Getenv("ZENFLOWS_URL")),
+		walletUrl: os.Getenv("WALLET_URL"),
+		keyring:   keyring,
 	}
 }
 
@@ -672,6 +700,11 @@ func main() {
 		ZenflowsUrl: config.zfUrl,
 	}
 
+	wa := WalletAgent{
+		Keyring:   config.keyring,
+		WalletUrl: config.walletUrl,
+	}
+
 	storage := &TTStorage{}
 	err := storage.Init(config.ttHost, config.ttUser, config.ttPass)
 	if err != nil {
@@ -681,6 +714,7 @@ func main() {
 		storage:       storage,
 		zfUrl:         config.zfUrl,
 		zenflowsAgent: za,
+		walletAgent:   wa,
 	}
 
 	r := gin.Default()

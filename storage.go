@@ -167,6 +167,8 @@ func (storage *TTStorage) findActorLikes(id string) ([]uint64, error) {
 	return ids, nil
 }
 
+// The first parameter is true if the follow activity has been created or if it was not
+// accepted and now it is accepted
 func (storage *TTStorage) storeFollower(activity Activity, accepted bool) (bool, uint64, error) {
 	created := false
 	if activity.Type != "Follow" {
@@ -197,12 +199,14 @@ func (storage *TTStorage) storeFollower(activity Activity, accepted bool) (bool,
 		if !currentAccepted && accepted {
 			resp, err := storage.db.Update("follow", "primary",
 				[]interface{}{cod},
-				[]interface{}{[]interface{}{"=", 4, accepted}})
+				[]interface{}{[]interface{}{"=", 3, accepted}})
 			if err != nil {
 				return false, 0, err
 			} else if resp.Error != "" {
 				return false, 0, errors.New(resp.Error)
 			}
+
+			created = true
 		}
 	}
 
