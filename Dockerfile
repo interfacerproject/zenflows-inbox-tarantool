@@ -5,6 +5,7 @@ RUN apt update && apt install -y build-essential git cmake vim python3 python3-p
 RUN cd /zenroom && make linux-go
 
 FROM golang:1.19-bullseye AS builder
+ENV GONOPROXY=
 RUN apt update && apt install -y libssl-dev
 COPY --from=zenroom /zenroom/meson/libzenroom.so /usr/lib/
 COPY --from=zenroom /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /lib/
@@ -12,7 +13,7 @@ COPY --from=zenroom /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /lib/
 WORKDIR /app
 COPY go.mod ./
 COPY go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 ADD . .
 RUN go build -o inbox .
